@@ -1,0 +1,66 @@
+openapi: 3.0.0
+info:
+  title: BIAT Retail Banking - Accounts API
+  description: API for managing customer bank accounts, balances, and transaction history.
+  version: "1.0" # ERROR: Microsoft requires YYYY-MM-DD format
+  contact:
+    name: BIAT IT Support
+    # ERROR: Missing email (Triggers your biat-contact-info rule)
+
+servers:
+  - url: http://api.biat.com.tn/v1 # ERROR: Security risk! Should be HTTPS
+    description: Production Server
+
+paths:
+  /get_Account_Details/{accountId}: # ERROR: Not kebab-case and uses a verb
+    get:
+      tags:
+        - Accounts
+      summary: Retrieves specific account details
+      operationId: getAccountDetails # Microsoft likes camelCase for IDs
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful account retrieval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        # ERROR: Missing 400/401/500 error responses (Microsoft Standard)
+
+  /accounts/transferFunds: # ERROR: Path contains a verb "transferFunds"
+    post:
+      tags:
+        - Transactions
+      summary: Transfer money between accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source_account: { type: string } # ERROR: Should be camelCase
+                destinationAccount: { type: string }
+                Amount: { type: number } # ERROR: PascalCase is not camelCase
+
+components:
+  schemas:
+    Account:
+      type: object
+      properties:
+        accountId:
+          type: string
+        account_type: # ERROR: Snake_case violation
+          type: string
+          enum: [SAVINGS, CHECKING, LOAN]
+        balance:
+          type: number
+        currency:
+          type: string
+          default: TND

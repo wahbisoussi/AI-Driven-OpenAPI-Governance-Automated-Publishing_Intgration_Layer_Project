@@ -1,0 +1,12 @@
+# app/core/rulesets/main.yaml
+extends:
+  - ./microsoft-standard.yaml
+  - ./security-rules.yaml
+
+rules:
+  biat-contact-info:
+    description: "Every API must list a contact email for the BIAT IT team."
+    given: "$.info.contact"
+    then:
+      function: truthy
+    severity: info

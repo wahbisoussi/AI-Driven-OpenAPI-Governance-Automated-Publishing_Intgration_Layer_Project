@@ -1,0 +1,18 @@
+# app/core/rulesets/security-rules.yaml
+rules:
+  no-http:
+    description: "Security: All servers must use HTTPS."
+    given: "$.servers[*].url"
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "^http://"
+    severity: error
+  
+  auth-required:
+    description: "Security: Every API must define a security scheme (OAuth2/Key)."
+    given: "$"
+    then:
+      field: components.securitySchemes
+      function: truthy
+    severity: warn
