@@ -1,0 +1,20 @@
+openapi: 3.0.1
+info:
+  title: Testing-Violations-API
+  version: 2025 # ERROR: Invalid format
+paths:
+  /accounts/transfer/execute: # ERROR: Too many verbs
+    post:
+      summary: transfer
+      operationId: TransferNow # ERROR: Should be camelCase
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Source_Account: { type: string } # ERROR: snake_case/PascalCase
+                  amount: { type: number }
+# ERROR: No components, no security, no error handlers (400/401/500), no tags

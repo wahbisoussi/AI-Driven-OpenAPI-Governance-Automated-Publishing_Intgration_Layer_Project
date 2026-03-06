@@ -1,17 +1,31 @@
-# app/core/rulesets/microsoft-standard.yaml
 extends: 
-  - spectral:oas
-  - https://raw.githubusercontent.com/azure/azure-api-style-guide/main/spectral.yaml
+  - "spectral:oas"
+  - "https://raw.githubusercontent.com/azure/azure-api-style-guide/main/spectral.yaml"
+
 rules:
-  # We enforce kebab-case strictly for BIAT
-  ms-path-kebab-case:
-    description: "Paths must be lowercase kebab-case."
-    message: "{{property}} is not in a valid kebab-case format."
-    severity: error
+  biat-version-format:
+    description: "Version must be in YYYY-MM-DD format."
+    severity: "error"
+    given: "$.info.version"
+    then:
+      function: "pattern"
+      functionOptions:
+        match: "^\\d{4}-\\d{2}-\\d{2}$"
+
+  property-case-camel:
+    description: "All properties must be camelCase."
+    severity: "error"
+    given: "$.components.schemas[*].properties[*]~"
+    then:
+      function: "casing"
+      functionOptions:
+        type: "camel"
+
+  no-generic-paths:
+    description: "Paths should not be generic (e.g., /test, /data)."
+    severity: "warn"
     given: "$.paths[*]~"
     then:
-      function: pattern
+      function: "pattern"
       functionOptions:
-        # This checks for the kebab-case part and IGNORES the {parameters} 
-        # by checking only the static parts of the path.
-        match: "^(/[a-z0-9-]*|/\\{[a-zA-Z0-9]+\\})+$"
+        notMatch: "/(test|data|sample|temp)/"

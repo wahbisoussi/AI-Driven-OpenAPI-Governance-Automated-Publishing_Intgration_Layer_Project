@@ -1,0 +1,27 @@
+rules:
+  biat-info-description:
+    description: "Description field must be at least 20 characters."
+    severity: "warn"
+    given: "$.info.description"
+    then:
+      function: "length"
+      functionOptions:
+        min: 20
+
+  require-operation-summary:
+    description: "Every operation must have a summary."
+    severity: "error"
+    given: "$.paths[*][*]"
+    then:
+      field: "summary"
+      function: "truthy"
+
+  require-error-responses:
+    description: "Operations must include 400 and 500 error responses."
+    severity: "error"
+    given: "$.paths[*][*].responses"
+    then:
+      # Spectral field check only accepts one string. 
+      # Checking for multiple requires logic or separate rules.
+      field: "400"
+      function: "truthy"

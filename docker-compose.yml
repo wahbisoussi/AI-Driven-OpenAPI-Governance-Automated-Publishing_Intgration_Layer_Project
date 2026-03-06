@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:15
+    container_name: api_governance_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: api_governance_db
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./Backend
+    container_name: api_governance_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:admin123@db:5432/api_governance_db
+    depends_on:
+      - db

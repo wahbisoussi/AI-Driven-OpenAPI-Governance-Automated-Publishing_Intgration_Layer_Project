@@ -1,0 +1,17 @@
+openapi: 3.0.1
+info:
+  title: BIAT Legacy Bridge API
+  version: "1.0.0" # WARNING: Does not follow YYYY-MM-DD
+  contact:
+    name: BIAT Support
+# WARNING: Missing email
+servers:
+  - url: http://api.biat.com.tn # WARNING: Insecure HTTP
+paths:
+  /getAccountInfo: # WARNING: Verb in path
+    get:
+      summary: info
+      responses:
+        '200':
+          description: OK
+# WARNING: No schema definitions provided in components
