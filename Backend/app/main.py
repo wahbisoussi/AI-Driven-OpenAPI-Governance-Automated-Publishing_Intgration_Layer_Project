@@ -3,7 +3,7 @@ from app.api.v1.endpoints import specs
 from app.db.base import Base
 from app.db.session import engine
 
-# Create database tables automatically
+# This creates the tables in PostgreSQL if they don't exist
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AI-Driven API Governance")

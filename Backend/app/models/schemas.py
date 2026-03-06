@@ -1,5 +1,6 @@
 import enum
 
+# schemas.py
 class WorkflowStatus(enum.Enum):
     IMPORTED = "IMPORTED"
     VALIDATED = "VALIDATED"

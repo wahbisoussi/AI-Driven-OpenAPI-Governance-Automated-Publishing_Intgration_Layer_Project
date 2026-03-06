@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from app.db.base import Base
 from app.models.schemas import Severity
 
+#audit_results.py
 class StructuralReport(Base):
     __tablename__ = "structural_reports"
     id = Column(Integer, primary_key=True, index=True)
