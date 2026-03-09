@@ -2,6 +2,7 @@ import json
 from app.core.linter import run_spectral_audit
 from app.core.scoring import calculate_structural_score
 
+#test_spectral.py
 def test_pipeline():
     # Keep this fixed as you requested
     file_path = "test_spec_violation.yaml" 

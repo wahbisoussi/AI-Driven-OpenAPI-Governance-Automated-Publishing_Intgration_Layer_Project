@@ -35,8 +35,10 @@ class LLMEngine:
         }
 
         try:
-            response = requests.post(self.url, json=payload, timeout=30)
+            # Added 120s timeout to handle initial model loading (cold-start)
+            response = requests.post(self.url, json=payload, timeout=120)
             response.raise_for_status()
+            
             # Extract the response text from Ollama's JSON
             return response.json().get('response', "AI could not generate a suggestion at this time.")
         except Exception as e:
