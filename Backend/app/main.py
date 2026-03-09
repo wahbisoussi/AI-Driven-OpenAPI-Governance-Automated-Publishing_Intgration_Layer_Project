@@ -6,7 +6,7 @@ from app.db.session import engine
 # This creates the tables in PostgreSQL if they don't exist
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="AI-Driven API Governance")
+app = FastAPI(title="BIAT-IT |AI-Driven API Governance")
 
 # Include the router
 app.include_router(specs.router, prefix="/api/v1/specs", tags=["Specifications"])
