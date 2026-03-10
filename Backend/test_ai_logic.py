@@ -26,7 +26,8 @@ def test_ai_phase():
     suggestions = llama_engine.generate_fix_suggestions(
         new_intent=new_intent,
         existing_intent=existing_intent,
-        similarity_score=0.88
+        similarity_score=0.88,
+        raw_yaml=content
     )
 
     print("\n--- GOVERNANCE REPORT (LLAMA 3) ---")

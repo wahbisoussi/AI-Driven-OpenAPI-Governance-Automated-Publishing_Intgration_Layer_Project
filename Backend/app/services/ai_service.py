@@ -49,7 +49,8 @@ class AIService:
                 ai_fix = self.llm_engine.generate_fix_suggestions(
                     new_intent=text_to_embed,
                     existing_intent=existing_intent,
-                    similarity_score=similarity_score
+                    similarity_score=similarity_score,
+                    raw_yaml=spec.raw_content
                 )
 
         # 5. Save the Analysis to the database (as per Class Diagram)
