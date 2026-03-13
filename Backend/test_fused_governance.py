@@ -3,6 +3,14 @@ from app.db.session import SessionLocal
 from app.services.governance_service import run_governance_pipeline
 from app.models.audit_results import StructuralReport, ViolationDetail
 from app.api.v1.endpoints.specs import handle_ai_suggestions
+from sqlalchemy import create_engine, false
+from sqlalchemy.orm import sessionmaker
+import os 
+
+#Database Setup for Testing
+LOCAL_DB_ADDR = "postgresql://postgres:admin123@localhost:5432/api_governance_db"
+engine = create_engine(LOCAL_DB_ADDR)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False , bind=engine)
 
 def run_fused_pipeline_test():
     db = SessionLocal()
@@ -11,7 +19,7 @@ def run_fused_pipeline_test():
     file_path = "test_spec_violation.yaml" # Change to test_spec_compliant.yaml to test the Green Lane
     
     print("\n" + "="*70)
-    print("   BIAT-IT FULL AI-DRIVEN GOVERNANCE AUDIT")
+    print("   BIAT-IT :FULL AI-DRIVEN OPENAPI GOVERNANCE AND AUTOMATED PUBLISHING PIPELINE TEST   ")
     print("="*70)
     print("--- About this Phase: ---")
     print("The BIAT-IT Spectral Engine will analyze the imported OpenAPI Spec")
