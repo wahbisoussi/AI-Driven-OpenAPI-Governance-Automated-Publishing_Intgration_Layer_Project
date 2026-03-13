@@ -4,11 +4,13 @@ FROM python:3.11-slim
 # 2. Set the working directory
 WORKDIR /app
 
-# 3. Install system dependencies (needed for Postgres/Spectral)
+# 3. Install system dependencies & Node.js 18 (Required for Stoplight Spectral)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
-    npm \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # 4. Install Spectral Linter globally in the container

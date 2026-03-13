@@ -1,15 +1,16 @@
+import os
 from sqlalchemy.orm import Session
 from app.models.specification import APISpecification
 from app.models.audit_results import StructuralReport, ViolationDetail
+from app.models.governance_report import GovernanceReport
 from app.models.schemas import WorkflowStatus, Severity
 from app.core.linter import run_spectral_audit
 from app.core.scoring import calculate_structural_score
-# Import the new AI Service
 from app.services.ai_service import AIService 
-import os
+from app.services.governance_gate import evaluate_api_compliance
 
 def run_governance_pipeline(db: Session, title: str, version: str, content: str, user_id: int):
-    # 1. Create initial Specification record
+    # PHASE 1: INITIAL IMPORT [cite: 14]
     new_spec = APISpecification(
         title=title,
         version=version,
@@ -26,11 +27,10 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         f.write(content)
 
     try:
-        # 2. Execution of Spectral Linter
+        # PHASE 2: STRUCTURAL AUDIT (Spectral) [cite: 15, 31]
         raw_violations = run_spectral_audit(temp_file_path)
         audit_results = calculate_structural_score(raw_violations)
         
-        # 3. Persist Structural Report
         report = StructuralReport(
             score=audit_results["score"],
             isPassed=audit_results["is_passed"],
@@ -40,9 +40,7 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         )
         db.add(report)
         db.commit()
-        db.refresh(report)
 
-        # 4. Persist individual violations
         for v in audit_results["violations"]:
             sev = Severity.ERROR if v.get("severity") == 0 else Severity.WARNING
             violation = ViolationDetail(
@@ -53,35 +51,48 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
             )
             db.add(violation)
 
-        # === NEW: AI SEMANTIC ENGINE GATE ===
-        # As per your diagram: If Score >= 80%, move to AI Analysis Stage
+        # PHASE 3: AI SEMANTIC ENGINE [cite: 16, 34]
         ai_report = None
-        if report.isPassed: # isPassed is True if score >= 80
-            new_spec.workflow_status = WorkflowStatus.VALIDATED
-            db.commit() # Save the validated status before AI starts
+        similarity_score = 0.0
 
-            # Initialize and run AI Service
+        if report.isPassed: 
+            new_spec.workflow_status = WorkflowStatus.VALIDATED
+            db.commit()
+            
             ai_service = AIService()
             ai_report = ai_service.analyze_api_semantics(db, new_spec)
+            similarity_score = ai_report.similarity_score if ai_report else 0.0
 
-            # Update status based on AI Redundancy findings
-            if ai_report.is_redundant:
-                new_spec.workflow_status = WorkflowStatus.REJECTED # Overlap detected
-            else:
-                new_spec.workflow_status = WorkflowStatus.PROTOTYPE_READY # Pass to next layer
-        else:
-            new_spec.workflow_status = WorkflowStatus.REJECTED
+        # PHASE 4: GOVERNANCE GATE (Automated Decision) [cite: 17, 33]
+        # Uses 'suggestions_applied' to check if developer already fixed issues
+        gate_decision = evaluate_api_compliance(
+            structural_score=report.score,
+            ai_similarity=similarity_score,
+            suggestions_accepted=new_spec.suggestions_applied 
+        )
 
+        # Update Final Status & Audit Trail [cite: 24]
+        new_spec.workflow_status = WorkflowStatus(gate_decision["status"])
+        
+        gov_report = GovernanceReport(
+            api_spec_id=new_spec.id,
+            structural_score=report.score,
+            ai_similarity_score=similarity_score,
+            final_decision=gate_decision["status"],
+            reason=gate_decision["reason"]
+        )
+        db.add(gov_report)
         db.commit()
 
         return {
             "spec_id": new_spec.id, 
-            "status": new_spec.workflow_status, 
-            "structural_score": report.score,
+            "status": new_spec.workflow_status.value, 
+            "governance_decision": gate_decision["status"],
+            "reason": gate_decision["reason"],
             "ai_analysis": {
-                "similarity": ai_report.similarity_score if ai_report else None,
-                "is_redundant": ai_report.is_redundant if ai_report else False,
-                "suggestions": ai_report.ai_suggested_fix if ai_report else None
+                "similarity": similarity_score,
+                "suggestions": ai_report.ai_suggested_fix if ai_report else None,
+                "requires_action": gate_decision["status"] == "AWAITING_FIX_CONFIRMATION"
             }
         }
 
