@@ -2,7 +2,6 @@ version: '3.8'
 
 services:
   db:
-    # Changed from standard postgres to pgvector so your AI Semantic Search works!
     image: pgvector/pgvector:pg15
     container_name: api_governance_postgres
     environment:
@@ -19,6 +18,8 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    # Add this to ensure it stays up and is ready
+    restart: unless-stopped 
 
   backend:
     build: ./Backend
@@ -27,8 +28,9 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://postgres:admin123@db:5432/api_governance_db
-      # Tell the backend to look for Ollama inside the docker network, not localhost
       OLLAMA_URL: http://ollama:11434/api/generate 
+    env_file:  # <--- MAKE SURE THIS IS HERE!
+      - .env
     depends_on:
       - db
       - ollama
