@@ -4,7 +4,7 @@ FROM python:3.11-slim
 # 2. Set the working directory
 WORKDIR /app
 
-# 3. Install system dependencies & Node.js 18 (Required for Stoplight Spectral)
+# 3. Install system dependencies & Node.js 18
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
@@ -13,18 +13,30 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# 4. Install Spectral Linter globally in the container
+# 4. Install Spectral Linter globally
 RUN npm install -g @stoplight/spectral-cli
 
-# 5. Copy requirements and install
+# 5. Copy requirements file
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# 6. Copy the rest of the application
+# 6. STEP ONE: Install Small/Fast Core Libraries
+# This fixes the "multipart" error instantly and is very fast.
+RUN pip install --default-timeout=1000 \
+    fastapi uvicorn sqlalchemy psycopg2-binary \
+    pydantic python-multipart python-dotenv requests pyyaml
+
+# 7. STEP TWO: Install Heavy AI Libraries (The 1.5GB stuff)
+# We give this a massive 30-minute timeout (2000s) to handle hiccups.
+RUN pip install --default-timeout=2000 \
+    sentence-transformers>=2.6.0 pgvector==0.2.4
+
+# 8. STEP THREE: Final verification
+# Ensures everything in requirements.txt is satisfied.
+RUN pip install -r requirements.txt
+
+# 9. Copy the rest of the application
 COPY . .
 
-# 7. Expose the port FastAPI will run on
+# 10. Expose and Start
 EXPOSE 8000
-
-# 8. Command to start the app
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

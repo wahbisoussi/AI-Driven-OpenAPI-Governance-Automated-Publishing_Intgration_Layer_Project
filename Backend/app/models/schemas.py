@@ -1,5 +1,5 @@
 import enum
-
+from pydantic import BaseModel
 # schemas.py
 class WorkflowStatus(enum.Enum):
     IMPORTED = "IMPORTED"
@@ -20,3 +20,7 @@ class WSO2State(enum.Enum):
     PROTOTYPED = "PROTOTYPED"
     PUBLISHED = "PUBLISHED"
     DEPRECATED = "DEPRECATED"
+
+class ManualReviewPayload(BaseModel):
+    decision: str
+    notes: str

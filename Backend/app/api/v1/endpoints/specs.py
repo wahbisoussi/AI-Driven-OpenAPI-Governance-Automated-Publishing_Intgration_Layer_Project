@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.services.governance_service import run_governance_pipeline
 from app.models.specification import APISpecification
 from app.models.governance_report import GovernanceReport
-from app.models.schemas import WorkflowStatus
+from app.models.schemas import WorkflowStatus, ManualReviewPayload
 
 router = APIRouter()
 

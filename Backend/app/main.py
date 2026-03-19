@@ -3,10 +3,16 @@ from app.api.v1.endpoints import specs
 from app.db.base import Base
 from app.db.session import engine
 
-# This creates the tables in PostgreSQL if they don't exist
+# --- CRITICAL: Import all models so SQLAlchemy 'sees' the relationships ---
+from app.models.user import User 
+from app.models.specification import APISpecification
+from app.models.governance_report import GovernanceReport
+# --------------------------------------------------------------------------
+
+# This now creates the tables in the CORRECT order
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="BIAT-IT |AI-Driven API Governance")
+app = FastAPI(title="BIAT-IT | AI-Driven API Governance")
 
 # Include the router
 app.include_router(specs.router, prefix="/api/v1/specs", tags=["Specifications"])

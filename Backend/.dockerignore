@@ -1,5 +1,20 @@
+# Virtual environments
+venv/
 .venv/
+env/
+
+# Python cache files (these cause huge slowdowns)
 __pycache__/
-*.db
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Git and IDE folders
 .git/
-.env
+.vscode/
+.idea/
+
+# General logs and databases
+*.sqlite3
+*.log
