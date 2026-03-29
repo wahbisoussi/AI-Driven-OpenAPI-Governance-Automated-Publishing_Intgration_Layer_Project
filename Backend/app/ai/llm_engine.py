@@ -3,8 +3,9 @@ import requests
 
 class LLMEngine:
     def __init__(self):
-        # Look for Docker environment variable first, fallback to localhost
-        self.url = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+        # In Docker Compose, 'ollama' is the hostname. 
+        # We look for the env var, but default to the Docker service name.
+        self.url = os.getenv("OLLAMA_URL", "http://ollama:11434/api/generate")
         self.model = "llama3"
 
     def generate_fix_suggestions(self, new_intent: str, existing_intent: str, similarity_score: float, raw_yaml: str) -> str:

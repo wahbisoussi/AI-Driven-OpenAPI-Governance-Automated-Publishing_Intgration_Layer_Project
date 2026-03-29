@@ -1,5 +1,7 @@
 from typing import List, Dict
 
+#scoring.py
+
 def calculate_structural_score(violations: List[Dict]) -> Dict:
     """
     Analyzes Spectral violations to produce a score and pass/fail status.

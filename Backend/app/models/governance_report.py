@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
 from datetime import datetime, timezone
 from app.db.base import Base
+from sqlalchemy.orm import relationship # Add this import at the top
 
 class GovernanceReport(Base):
     __tablename__ = "governance_reports"
@@ -20,3 +21,5 @@ class GovernanceReport(Base):
     # Manual Review Data
     reviewed_by = Column(String, nullable=True)
     reviewer_notes = Column(String, nullable=True)
+
+    api_spesification = relationship("APISpecification", back_populates="governance_report")

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.ai_analysis import SemanticAnalysis
 from app.models.specification import APISpecification
 
+#vector_store.py
 class VectorStore:
     def __init__(self):
         # Using a professional, industry-standard lightweight model (384 dimensions)
@@ -32,17 +33,19 @@ class VectorStore:
         """Generates the 384-dimension vector."""
         return self.model.encode(text).tolist()
 
-    def find_most_similar(self, db: Session, current_spec_id: str, embedding: list):
-        """
-        Queries PGVector for the most similar existing API.
-        Uses Cosine Distance (1 - Cosine Similarity).
-        """
-        # We search for the closest match that isn't the current spec itself
+def find_most_similar(self, db: Session, current_spec_id: str, embedding: list):
+        # 1. We build the query, but DON'T call .first() yet
         query = db.query(
             SemanticAnalysis,
             (1 - SemanticAnalysis.embedding.cosine_distance(embedding)).label("similarity")
         ).filter(SemanticAnalysis.specification_id != current_spec_id) \
-         .order_by(SemanticAnalysis.embedding.cosine_distance(embedding)) \
-         .first()
+         .order_by(SemanticAnalysis.embedding.cosine_distance(embedding))
 
-        return query # Returns (SemanticAnalysis object, similarity_score)
+        # 2. Now we execute it once
+        result = query.first()
+        
+        # 3. Safety check: if the database is empty or no other specs exist
+        if not result:
+            return None
+            
+        return result # Returns (SemanticAnalysis object, similarity_score)

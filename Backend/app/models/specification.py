@@ -17,6 +17,7 @@ class APISpecification(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     # One-to-One relationship with the Audit Report
     structural_report = relationship("StructuralReport", back_populates="api_specification", uselist=False)
+    governance_report = relationship("GovernanceReport", back_populates="api_specification", uselist=False)
 
     suggestions_applied = Column(Boolean, default=False)
     user_justification = Column(String, nullable=True) # Optional: why they said 'No'

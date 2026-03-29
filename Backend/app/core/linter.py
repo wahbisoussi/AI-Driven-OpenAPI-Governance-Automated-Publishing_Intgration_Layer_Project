@@ -22,7 +22,7 @@ def run_spectral_audit(file_path: str) -> list:
     ]
     
     # 4. Run the command
-    result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, shell=False)
     
     # 5. Handle output
     # Use regex to find the content between the first '[' and last ']'

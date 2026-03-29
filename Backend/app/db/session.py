@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
 
+#session.py
 load_dotenv()
 
 # Uses the .env file found in your Backend folder
