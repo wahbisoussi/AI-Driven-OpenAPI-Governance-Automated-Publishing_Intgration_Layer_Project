@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from sqlalchemy import text
 from app.db.base import Base
 from app.db.session import engine, SessionLocal
 
-# --- 1. Import ALL models ---
+# --- 1. Import ALL models (Crucial for create_all) ---
 from app.models.user import User 
 from app.models.specification import APISpecification
 from app.models.governance_report import GovernanceReport
@@ -13,11 +14,21 @@ from app.models.ai_analysis import SemanticAnalysis
 # --- 2. Import Routers ---
 from app.api.v1.endpoints import specs
 
-# --- 3. Lifespan Handler (The modern way) ---
+# --- 3. Lifespan Handler ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Startup Logic ---
-    # Create tables
+    
+    # Enable PGVector extension before creating tables
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            conn.commit()
+            print("🧠 PGVector extension verified.")
+    except Exception as e:
+        print(f"⚠️ Vector Extension Error: {e}")
+
+    # Now create tables (Postgres now knows what 'vector' is)
     Base.metadata.create_all(bind=engine)
     
     # Create default user for testing
@@ -34,18 +45,15 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
     
-    yield  # The app runs while this is held
+    yield  # Application runs
     
-    # --- Shutdown Logic (Optional) ---
     print("Shutting down Governance Engine...")
 
-# --- 4. FastAPI App Setup ---
 app = FastAPI(
     title="BIAT-IT | AI-Driven API Governance",
-    lifespan=lifespan  # Connect the lifespan here
+    lifespan=lifespan
 )
 
-# --- 5. Include Routes ---
 app.include_router(specs.router, prefix="/api/v1/specs", tags=["Specifications"])
 
 @app.get("/")
