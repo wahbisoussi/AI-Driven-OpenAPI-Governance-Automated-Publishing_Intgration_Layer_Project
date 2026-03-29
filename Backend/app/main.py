@@ -33,13 +33,24 @@ async def lifespan(app: FastAPI):
     
     # Create default user for testing
     db = SessionLocal()
+    # Inside your lifespan function in main.py:
+
+    # Create default user for testing
+    db = SessionLocal()
     try:
         admin_user = db.query(User).filter(User.id == 1).first()
         if not admin_user:
-            new_user = User(id=1, username="biat_admin", email="admin@biat.com.tn")
+            new_user = User(
+                id=1, 
+                username="biat_admin", 
+                email="admin@biat.com.tn",
+                password_hash="system_managed_hash", # Placeholder
+                role="ADMIN",
+                department="IT_GOVERNANCE"
+            )
             db.add(new_user)
             db.commit()
-            print("🚀 System User (ID: 1) is ready.")
+            print("🚀 System User (ID: 1) with full profile is ready.")
     except Exception as e:
         print(f"⚠️ Startup User Error: {e}")
     finally:
