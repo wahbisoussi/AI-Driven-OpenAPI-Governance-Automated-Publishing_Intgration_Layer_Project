@@ -10,7 +10,8 @@ from app.services.ai_service import AIService
 from app.services.governance_gate import evaluate_api_compliance
 
 def run_governance_pipeline(db: Session, title: str, version: str, content: str, user_id: int):
-    # PHASE 1: INITIAL IMPORT [cite: 14]
+    # PHASE 1: INITIAL IMPORT
+    # Create the record so we have a valid ID for foreign keys
     new_spec = APISpecification(
         title=title,
         version=version,
@@ -27,7 +28,7 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         f.write(content)
 
     try:
-        # PHASE 2: STRUCTURAL AUDIT (Spectral) [cite: 15, 31]
+        # PHASE 2: STRUCTURAL AUDIT (Spectral)
         raw_violations = run_spectral_audit(temp_file_path)
         audit_results = calculate_structural_score(raw_violations)
         
@@ -39,8 +40,9 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
             api_spec_id=new_spec.id
         )
         db.add(report)
-        db.commit()
+        db.flush() # Flush to get report.id for violations
 
+        # Save individual violations for the UI/Audit trail
         for v in audit_results["violations"]:
             sev = Severity.ERROR if v.get("severity") == 0 else Severity.WARNING
             violation = ViolationDetail(
@@ -51,29 +53,35 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
             )
             db.add(violation)
 
-        # PHASE 3: AI SEMANTIC ENGINE [cite: 16, 34]
+        # PHASE 3: AI SEMANTIC ENGINE
         ai_report = None
         similarity_score = 0.0
 
+        # We only run AI analysis if the API is structurally sound (isPassed)
         if report.isPassed: 
-            new_spec.workflow_status = WorkflowStatus.VALIDATED
-            db.commit()
-            
+            print(f"🧠 Starting AI Semantic Analysis for Spec {new_spec.id}...")
             ai_service = AIService()
             ai_report = ai_service.analyze_api_semantics(db, new_spec)
-            similarity_score = ai_report.similarity_score if ai_report else 0.0
+            
+            if ai_report:
+                # Ensure we have a float for the gate logic
+                similarity_score = float(ai_report.similarity_score)
+                print(f"📊 AI Result: Similarity {similarity_score} | Redundant: {ai_report.is_redundant}")
+        else:
+            print(f"⚠️ Spec {new_spec.id} failed structural audit. Skipping AI Phase.")
 
-        # PHASE 4: GOVERNANCE GATE (Automated Decision) [cite: 17, 33]
-        # Uses 'suggestions_applied' to check if developer already fixed issues
+        # PHASE 4: GOVERNANCE GATE (The "Decider")
+        # This function determines if the API is REJECTED, NEEDS_FIX, or PROTOTYPE_READY
         gate_decision = evaluate_api_compliance(
             structural_score=report.score,
             ai_similarity=similarity_score,
             suggestions_accepted=new_spec.suggestions_applied 
         )
 
-        # Update Final Status & Audit Trail [cite: 24]
+        # Update the Specification status based on the Gate decision
         new_spec.workflow_status = WorkflowStatus(gate_decision["status"])
         
+        # Create the final Governance Report (Audit Trail)
         gov_report = GovernanceReport(
             api_spec_id=new_spec.id,
             structural_score=report.score,
@@ -84,6 +92,7 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         db.add(gov_report)
         db.commit()
 
+        # Build Response
         return {
             "spec_id": new_spec.id, 
             "status": new_spec.workflow_status.value, 
@@ -91,10 +100,15 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
             "reason": gate_decision["reason"],
             "ai_analysis": {
                 "similarity": similarity_score,
-                "suggestions": ai_report.ai_suggested_fix if ai_report else None,
-                "requires_action": gate_decision["status"] == "AWAITING_FIX_CONFIRMATION"
+                "suggestions": ai_report.ai_suggested_fix if ai_report else "No suggestions available.",
+                "requires_action": gate_decision["status"] in ["AWAITING_FIX_CONFIRMATION", "REJECTED"]
             }
         }
+
+    except Exception as e:
+        db.rollback()
+        print(f"❌ PIPELINE ERROR: {str(e)}")
+        raise e
 
     finally:
         if os.path.exists(temp_file_path):

@@ -4,68 +4,71 @@ from app.ai.llm_engine import LLMEngine
 from app.models.ai_analysis import SemanticAnalysis
 from app.models.specification import APISpecification
 
-#ai_service.py
 class AIService:
     def __init__(self):
-        # Initialize our two AI sub-components
         self.vector_store = VectorStore()
         self.llm_engine = LLMEngine()
 
     def analyze_api_semantics(self, db: Session, spec: APISpecification):
-        """
-        Orchestrates the Phase 3: AI-Driven Improvements & Duplicate Detection.
-        1. Vectorizes the new API spec.
-        2. Checks BIAT's catalog for existing overlaps.
-        3. If similarity >= 85%, triggers Llama 3 for fix suggestions.
-        """
-        
-        # 1. Generate the "Semantic Fingerprint" (Embedding)
-        # We extract Title, Description, and Paths to understand functional intent
+        # 1. ENSURE DATA VISIBILITY
+        # Force the DB to acknowledge the Spec exists before we link to it
+        db.flush()
+
+        # 2. Generate Embedding
         text_to_embed = self.vector_store._extract_searchable_text(spec.raw_content)
         current_embedding = self.vector_store.get_embedding(text_to_embed)
 
-        # 2. Perform Similarity Search in PostgreSQL (PGVector)
-        # find_most_similar returns (SemanticAnalysis, similarity_score)
+        # 3. Perform Similarity Search
         match_data = self.vector_store.find_most_similar(db, spec.id, current_embedding)
         
         is_redundant = False
         similarity_score = 0.0
-        ai_fix = "No significant redundancy detected. This API provides unique business value."
+        ai_fix = "No significant redundancy detected."
 
         if match_data:
+            # Unpack the tuple (Object, Score)
             existing_record, similarity_score = match_data
             
-            # 3. Apply the 85% Threshold Gate from your State Machine
             if similarity_score >= 0.85:
                 is_redundant = True
                 
-                # Fetch the existing spec content to compare them via LLM
+                # Fetch existing spec for LLM comparison
                 existing_spec = db.query(APISpecification).filter(
                     APISpecification.id == existing_record.specification_id
                 ).first()
                 
                 existing_intent = self.vector_store._extract_searchable_text(existing_spec.raw_content)
                 
-                # 4. Use Ollama (Llama 3) to generate professional fix suggestions
-                ai_fix = self.llm_engine.generate_fix_suggestions(
-                    new_intent=text_to_embed,
-                    existing_intent=existing_intent,
-                    similarity_score=similarity_score,
-                    raw_yaml=spec.raw_content
-                )
+                # 4. Use Ollama for Suggestions
+                try:
+                    ai_fix = self.llm_engine.generate_fix_suggestions(
+                        new_intent=text_to_embed,
+                        existing_intent=existing_intent,
+                        similarity_score=similarity_score,
+                        raw_yaml=spec.raw_content
+                    )
+                except Exception as e:
+                    print(f"⚠️ Ollama Suggestion Error: {e}")
+                    ai_fix = "AI Suggestions temporarily unavailable."
 
-        # 5. Save the Analysis to the database (as per Class Diagram)
+        # 5. SAVE ANALYSIS WITH ERROR HANDLING
         analysis_report = SemanticAnalysis(
             specification_id=spec.id,
             is_redundant=is_redundant,
-            is_duplicated=(similarity_score > 0.98), # Flag near-identical copies
-            similarity_score=similarity_score,
+            is_duplicated=(similarity_score > 0.98),
+            similarity_score=float(similarity_score), # Safety cast
             ai_suggested_fix=ai_fix,
             embedding=current_embedding
         )
         
-        db.add(analysis_report)
-        db.commit()
-        db.refresh(analysis_report)
+        try:
+            db.add(analysis_report)
+            db.commit() # The critical moment!
+            db.refresh(analysis_report)
+            print(f"✅ AI Analysis permanently saved for Spec {spec.id}")
+        except Exception as e:
+            db.rollback()
+            # THIS IS THE LOG WE NEED TO SEE IN DOCKER
+            print(f"❌ CRITICAL DATABASE ERROR: {str(e)}")
         
         return analysis_report
