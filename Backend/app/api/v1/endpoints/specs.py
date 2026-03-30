@@ -83,3 +83,32 @@ def manual_governance_review(spec_id: int, payload: ManualReviewPayload, db: Ses
 
     db.commit()
     return {"status": spec.workflow_status.value}
+
+    #for a simple crud (basically we may need getall_specs idk maybe in a list , getspecbyid , and maybe a posibility to delete a spec thing that we may need lol
+
+    #get all specs (put them in a list for future use maybe)
+@router.get("/all_specs")
+def get_all_specs(db: Session = Depends(get_db)):
+        specs = db.query(APISpecification).all()
+        if not specs:
+            # optional: return [] with 200, but if you want 404 keep this
+            # raise HTTPException(status_code=404, detail="No OpenAPI Specs found in BIAT System.")
+            return []
+        return specs
+
+#we get by id 
+@router.get("/{spec_id}")
+def get_spec_by_id(spec_id: int, db: Session = Depends(get_db)):
+    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
+    if not spec:
+        raise HTTPException(status_code=404, detail="OpenAPI Specification not found.")
+    return spec
+
+@router.delete("/{spec_id}")
+def delete_spec(spec_id: int, db: Session = Depends(get_db)):
+    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
+    if not spec:
+        raise HTTPException(status_code=404, detail="OpenAPI Specification not found.")
+    db.delete(spec)
+    db.commit()
+    return {"detail": "OpenAPI Specification deleted successfully."}
