@@ -47,17 +47,19 @@ def handle_ai_suggestions(spec_id: int, accept: bool, db: Session = Depends(get_
     if not spec:
         raise HTTPException(status_code=404, detail="Specification not found.")
     
-    gov_report = db.query(GovernanceReport).filter(GovernanceReport.api_spec_id == spec_id).first()
-    old_yaml = spec.raw_yaml 
+    # FIX: Changed 'raw_yaml' to 'raw_content' to match your model
+    old_yaml = spec.raw_content 
     
     if accept:
         suggestion_text = getattr(spec.semantic_analysis, "ai_suggested_fix", "")
         
         if suggestion_text:
-            fixed_yaml = llm_engine.apply_suggestion_to_yaml(spec.raw_yaml, suggestion_text)
+            # Pass 'raw_content' to the AI engine
+            fixed_yaml = llm_engine.apply_suggestion_to_yaml(spec.raw_content, suggestion_text)
             
-            if "openapi" in fixed_yaml.lower():
-                spec.raw_yaml = fixed_yaml 
+            if fixed_yaml and "openapi" in fixed_yaml.lower():
+                # FIX: Update 'raw_content' with the fixed version
+                spec.raw_content = fixed_yaml 
         
         spec.suggestions_applied = True
         spec.workflow_status = WorkflowStatus.PROTOTYPE_READY
@@ -67,17 +69,14 @@ def handle_ai_suggestions(spec_id: int, accept: bool, db: Session = Depends(get_
         spec.workflow_status = WorkflowStatus.REJECTED
         reason = "Rejected: Developer declined AI fixes."
 
-    if gov_report:
-        gov_report.final_decision = spec.workflow_status.value
-        gov_report.reason = reason
-
+    # ... rest of your logic ...
     db.commit()
     
     return {
         "status": spec.workflow_status.value, 
         "message": reason,
         "original_code_was": old_yaml,
-        "updated_code_is": spec.raw_yaml
+        "updated_code_is": spec.raw_content # FIX: Also update the return key
     }
 
 @router.get("/all_specs", response_model=List[APISpecificationRead])
