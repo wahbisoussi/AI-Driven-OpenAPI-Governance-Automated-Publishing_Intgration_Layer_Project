@@ -7,12 +7,14 @@ from app.db.session import get_db
 from app.services.governance_service import run_governance_pipeline
 from app.models.specification import APISpecification
 from app.models.governance_report import GovernanceReport
-# Import the new Read schema
 from app.models.schemas import WorkflowStatus, ManualReviewPayload, APISpecificationRead
+from app.ai.llm_engine import LLMEngine 
+from sqlalchemy import text # <--- Add this import at the top!
+
 
 router = APIRouter()
+llm_engine = LLMEngine() 
 
-# 1. INITIAL UPLOAD
 @router.post("/upload")
 async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db)):
     temp_path = f"temp_{file.filename}"
@@ -36,57 +38,50 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-# 2. THE INTERACTIVE AI FIX LOOP
 @router.post("/{spec_id}/apply-suggestions")
 def handle_ai_suggestions(spec_id: int, accept: bool, db: Session = Depends(get_db)):
-    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
+    spec = db.query(APISpecification).options(
+        joinedload(APISpecification.semantic_analysis)
+    ).filter(APISpecification.id == spec_id).first()
+    
     if not spec:
         raise HTTPException(status_code=404, detail="Specification not found.")
     
+    gov_report = db.query(GovernanceReport).filter(GovernanceReport.api_spec_id == spec_id).first()
+    old_yaml = spec.raw_yaml 
+    
     if accept:
+        suggestion_text = getattr(spec.semantic_analysis, "ai_suggested_fix", "")
+        
+        if suggestion_text:
+            fixed_yaml = llm_engine.apply_suggestion_to_yaml(spec.raw_yaml, suggestion_text)
+            
+            if "openapi" in fixed_yaml.lower():
+                spec.raw_yaml = fixed_yaml 
+        
         spec.suggestions_applied = True
         spec.workflow_status = WorkflowStatus.PROTOTYPE_READY
-        reason = "Success: Developer accepted AI fixes. Moving to Prototype mode."
+        reason = "Success: YAML refactored by AI."
     else:
         spec.suggestions_applied = False
         spec.workflow_status = WorkflowStatus.REJECTED
-        reason = "Rejected: Developer declined required AI fixes for high-redundancy API."
+        reason = "Rejected: Developer declined AI fixes."
 
-    gov_report = db.query(GovernanceReport).filter(GovernanceReport.api_spec_id == spec_id).first()
     if gov_report:
         gov_report.final_decision = spec.workflow_status.value
         gov_report.reason = reason
 
     db.commit()
-    return {"status": spec.workflow_status.value, "message": reason}
-
-# 3. MANUAL ARCHITECTURAL REVIEW
-@router.post("/{spec_id}/governance/review")
-def manual_governance_review(spec_id: int, payload: ManualReviewPayload, db: Session = Depends(get_db)):
-    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
-    if not spec or spec.workflow_status != WorkflowStatus.PENDING_REVIEW:
-        raise HTTPException(status_code=400, detail="Invalid specification or state.")
-
-    gov_report = db.query(GovernanceReport).filter(GovernanceReport.api_spec_id == spec_id).first()
-
-    if payload.decision == "APPROVE":
-        spec.workflow_status = WorkflowStatus.PROTOTYPE_READY
-    else:
-        spec.workflow_status = WorkflowStatus.REJECTED
-
-    if gov_report:
-        gov_report.final_decision = spec.workflow_status.value
-        gov_report.reason = f"Manual Review: {payload.notes}"
-        gov_report.reviewed_by = "Lead Architect"
-
-    db.commit()
-    return {"status": spec.workflow_status.value}
-
-# --- UPDATED CRUD ENDPOINTS ---
+    
+    return {
+        "status": spec.workflow_status.value, 
+        "message": reason,
+        "original_code_was": old_yaml,
+        "updated_code_is": spec.raw_yaml
+    }
 
 @router.get("/all_specs", response_model=List[APISpecificationRead])
 def get_all_specs(db: Session = Depends(get_db)):
-    # joinedload pulls the SemanticAnalysis data from the DB so it's not null
     specs = db.query(APISpecification).options(
         joinedload(APISpecification.semantic_analysis)
     ).all()
@@ -110,3 +105,32 @@ def delete_spec(spec_id: int, db: Session = Depends(get_db)):
     db.delete(spec)
     db.commit()
     return {"detail": "OpenAPI Specification deleted successfully."}
+
+# 4. DELETE ALL (Corrected for FastAPI)
+@router.delete("/all/clear-database")
+def delete_all_specs(db: Session = Depends(get_db)):
+    try:
+        # 1. Delete the deepest 'Grandchildren' first
+        db.execute(text("DELETE FROM violation_details"))
+        
+        # 2. Delete the 'Children'
+        db.execute(text("DELETE FROM structural_reports"))
+        db.execute(text("DELETE FROM governance_reports"))
+        db.execute(text("DELETE FROM semantic_analysis"))
+        
+        # 3. Finally, delete the 'Parents' (The YAML specs)
+        # We use the model here to get the count of how many were deleted
+        num_deleted = db.query(APISpecification).delete(synchronize_session=False)
+        
+        db.commit()
+        return {
+            "detail": f"System Purged. Deleted {num_deleted} specifications and all associated audit data.",
+            "status": "SUCCESS"
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Critical Wipe Error: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Database error: {str(e)}"
+        )
