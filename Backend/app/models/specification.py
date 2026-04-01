@@ -4,6 +4,7 @@ from datetime import datetime
 from app.db.base import Base
 from app.models.schemas import WorkflowStatus
 
+#specification.py
 class APISpecification(Base):
     __tablename__ = "api_specifications"
     

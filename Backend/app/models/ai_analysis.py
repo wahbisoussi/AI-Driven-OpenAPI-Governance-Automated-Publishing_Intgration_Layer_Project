@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 from app.db.base import Base
 
+#ai_analysis.py
 class SemanticAnalysis(Base):
     __tablename__ = "semantic_analysis"
 

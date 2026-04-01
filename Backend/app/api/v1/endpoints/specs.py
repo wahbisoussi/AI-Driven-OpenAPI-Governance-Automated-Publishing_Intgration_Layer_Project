@@ -1,13 +1,14 @@
 import shutil
 import os
+from typing import List
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from sqlalchemy.orm import Session, joinedload
 from app.db.session import get_db
 from app.services.governance_service import run_governance_pipeline
 from app.models.specification import APISpecification
 from app.models.governance_report import GovernanceReport
-from app.models.schemas import WorkflowStatus, ManualReviewPayload
+# Import the new Read schema
+from app.models.schemas import WorkflowStatus, ManualReviewPayload, APISpecificationRead
 
 router = APIRouter()
 
@@ -35,7 +36,7 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-# 2. THE INTERACTIVE AI FIX LOOP (Developer Reviews/Applies Fixes)
+# 2. THE INTERACTIVE AI FIX LOOP
 @router.post("/{spec_id}/apply-suggestions")
 def handle_ai_suggestions(spec_id: int, accept: bool, db: Session = Depends(get_db)):
     spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
@@ -43,17 +44,14 @@ def handle_ai_suggestions(spec_id: int, accept: bool, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="Specification not found.")
     
     if accept:
-        # Developer says YES [Matches 'Developer Fix' transition in State Machine]
         spec.suggestions_applied = True
         spec.workflow_status = WorkflowStatus.PROTOTYPE_READY
         reason = "Success: Developer accepted AI fixes. Moving to Prototype mode."
     else:
-        # Developer says NO
         spec.suggestions_applied = False
         spec.workflow_status = WorkflowStatus.REJECTED
         reason = "Rejected: Developer declined required AI fixes for high-redundancy API."
 
-    # Update Audit Trail
     gov_report = db.query(GovernanceReport).filter(GovernanceReport.api_spec_id == spec_id).first()
     if gov_report:
         gov_report.final_decision = spec.workflow_status.value
@@ -62,7 +60,7 @@ def handle_ai_suggestions(spec_id: int, accept: bool, db: Session = Depends(get_
     db.commit()
     return {"status": spec.workflow_status.value, "message": reason}
 
-# 3. MANUAL ARCHITECTURAL REVIEW (The Yellow Lane)
+# 3. MANUAL ARCHITECTURAL REVIEW
 @router.post("/{spec_id}/governance/review")
 def manual_governance_review(spec_id: int, payload: ManualReviewPayload, db: Session = Depends(get_db)):
     spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
@@ -84,22 +82,22 @@ def manual_governance_review(spec_id: int, payload: ManualReviewPayload, db: Ses
     db.commit()
     return {"status": spec.workflow_status.value}
 
-    #for a simple crud (basically we may need getall_specs idk maybe in a list , getspecbyid , and maybe a posibility to delete a spec thing that we may need lol
+# --- UPDATED CRUD ENDPOINTS ---
 
-    #get all specs (put them in a list for future use maybe)
-@router.get("/all_specs")
+@router.get("/all_specs", response_model=List[APISpecificationRead])
 def get_all_specs(db: Session = Depends(get_db)):
-        specs = db.query(APISpecification).all()
-        if not specs:
-            # optional: return [] with 200, but if you want 404 keep this
-            # raise HTTPException(status_code=404, detail="No OpenAPI Specs found in BIAT System.")
-            return []
-        return specs
+    # joinedload pulls the SemanticAnalysis data from the DB so it's not null
+    specs = db.query(APISpecification).options(
+        joinedload(APISpecification.semantic_analysis)
+    ).all()
+    return specs if specs else []
 
-#we get by id 
-@router.get("/{spec_id}")
+@router.get("/{spec_id}", response_model=APISpecificationRead)
 def get_spec_by_id(spec_id: int, db: Session = Depends(get_db)):
-    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
+    spec = db.query(APISpecification).options(
+        joinedload(APISpecification.semantic_analysis)
+    ).filter(APISpecification.id == spec_id).first()
+    
     if not spec:
         raise HTTPException(status_code=404, detail="OpenAPI Specification not found.")
     return spec
