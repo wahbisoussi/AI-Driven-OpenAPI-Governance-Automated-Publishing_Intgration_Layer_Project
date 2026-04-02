@@ -88,24 +88,37 @@ def get_all_specs(db: Session = Depends(get_db)):
     ).all()
     return specs if specs else []
 
-@router.get("/{spec_id}", response_model=APISpecificationRead)
+@router.get("/{spec_id}")
 def get_spec_by_id(spec_id: int, db: Session = Depends(get_db)):
+    # Use joinedload for all relationships so the frontend gets EVERYTHING
     spec = db.query(APISpecification).options(
-        joinedload(APISpecification.semantic_analysis)
+        joinedload(APISpecification.semantic_analysis),
+        joinedload(APISpecification.structural_report) # Add this
     ).filter(APISpecification.id == spec_id).first()
     
     if not spec:
-        raise HTTPException(status_code=404, detail="OpenAPI Specification not found.")
+        raise HTTPException(status_code=404, detail="API Specification not found.")
     return spec
 
 @router.delete("/{spec_id}")
 def delete_spec(spec_id: int, db: Session = Depends(get_db)):
     spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
     if not spec:
-        raise HTTPException(status_code=404, detail="OpenAPI Specification not found.")
-    db.delete(spec)
-    db.commit()
-    return {"detail": "OpenAPI Specification deleted successfully."}
+        raise HTTPException(status_code=404, detail="API Specification not found.")
+    
+    try:
+        # Manually clear related data to avoid Foreign Key errors
+        db.execute(text("DELETE FROM violation_details WHERE report_id IN (SELECT id FROM structural_reports WHERE api_spec_id = :id)"), {"id": spec_id})
+        db.execute(text("DELETE FROM structural_reports WHERE api_spec_id = :id"), {"id": spec_id})
+        db.execute(text("DELETE FROM semantic_analysis WHERE specification_id = :id"), {"id": spec_id})
+        db.execute(text("DELETE FROM governance_reports WHERE api_spec_id = :id"), {"id": spec_id})
+        
+        db.delete(spec)
+        db.commit()
+        return {"detail": f"Spec {spec_id} and all related audit data deleted."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 # 4. DELETE ALL (Corrected for FastAPI)
 @router.delete("/all/clear-database")

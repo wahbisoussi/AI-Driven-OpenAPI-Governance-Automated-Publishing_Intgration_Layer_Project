@@ -6,7 +6,10 @@ from app.models.specification import APISpecification
 
 class VectorStore:
     def __init__(self):
-        # Using a professional, industry-standard lightweight model (384 dimensions)
+        """
+        Initializes the Embedding Model. 
+        Model: all-MiniLM-L6-v2 (384 dimensions) - optimized for speed and CPU.
+        """
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
 
     def _extract_searchable_text(self, spec_content: str) -> str:
@@ -18,7 +21,7 @@ class VectorStore:
             description = info.get('description', '')
             
             paths_text = ""
-            paths = data.get('paths', {})
+            paths = data.get('paths', {}) or {}
             for path, methods in paths.items():
                 if isinstance(methods, dict):
                     for method, details in methods.items():
@@ -28,30 +31,30 @@ class VectorStore:
 
             return f"{title} {description} {paths_text}".strip()
         except Exception:
+            # Fallback to raw text if YAML is malformed
             return spec_content[:1000]
 
     def get_embedding(self, text: str):
         """Generates the 384-dimension vector."""
         return self.model.encode(text).tolist()
 
-    # FIX: Now properly inside the class
     def find_most_similar(self, db: Session, current_spec_id: int, embedding: list):
         """
         Queries PGVector for the most semantically similar API.
+        Returns a tuple of (SemanticAnalysisRecord, similarity_score) or None.
         """
-        # 1. Build the query using cosine distance (<-> operator in PGVector)
-        # We calculate (1 - distance) to get a similarity score (0 to 1)
+        # 1. We query for the record and the calculated similarity
+        # Cosine distance operator (<->) returns 0 for identical, 2 for opposite.
+        # We use (1 - distance) to map it to a 0.0 to 1.0 scale.
         query = db.query(
             SemanticAnalysis,
             (1 - SemanticAnalysis.embedding.cosine_distance(embedding)).label("similarity")
         ).filter(SemanticAnalysis.specification_id != current_spec_id) \
          .order_by(SemanticAnalysis.embedding.cosine_distance(embedding))
 
-        # 2. Execute and get the best match
         result = query.first()
         
-        # 3. If no other records exist in semantic_analysis, result will be None
         if not result:
             return None
             
-        return result
+        return result # This contains (SemanticAnalysis object, float similarity)
