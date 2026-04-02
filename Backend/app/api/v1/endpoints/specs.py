@@ -47,36 +47,38 @@ def handle_ai_suggestions(spec_id: int, accept: bool, db: Session = Depends(get_
     if not spec:
         raise HTTPException(status_code=404, detail="Specification not found.")
     
-    # FIX: Changed 'raw_yaml' to 'raw_content' to match your model
     old_yaml = spec.raw_content 
-    
+    reason = "No changes made."
+
     if accept:
+        # 1. Grab the suggestion we generated during the upload phase
         suggestion_text = getattr(spec.semantic_analysis, "ai_suggested_fix", "")
         
         if suggestion_text:
-            # Pass 'raw_content' to the AI engine
+            print(f"🪄 Applying AI Refactoring for Spec ID: {spec_id}")
+            # 2. Call our new, optimized Qwen2.5-Coder engine
             fixed_yaml = llm_engine.apply_suggestion_to_yaml(spec.raw_content, suggestion_text)
             
+            # 3. Validation: Ensure the AI didn't just return an error message
             if fixed_yaml and "openapi" in fixed_yaml.lower():
-                # FIX: Update 'raw_content' with the fixed version
                 spec.raw_content = fixed_yaml 
-        
-        spec.suggestions_applied = True
-        spec.workflow_status = WorkflowStatus.PROTOTYPE_READY
-        reason = "Success: YAML refactored by AI."
+                spec.suggestions_applied = True
+                spec.workflow_status = WorkflowStatus.PROTOTYPE_READY
+                reason = "Success: YAML optimized and refactored by AI."
+            else:
+                reason = "AI Refactor failed: Model returned invalid YAML."
     else:
         spec.suggestions_applied = False
         spec.workflow_status = WorkflowStatus.REJECTED
-        reason = "Rejected: Developer declined AI fixes."
+        reason = "Rejected: Developer declined AI optimizations."
 
-    # ... rest of your logic ...
     db.commit()
     
     return {
         "status": spec.workflow_status.value, 
         "message": reason,
-        "original_code_was": old_yaml,
-        "updated_code_is": spec.raw_content # FIX: Also update the return key
+        "original_code": old_yaml,
+        "updated_code": spec.raw_content 
     }
 
 @router.get("/all_specs", response_model=List[APISpecificationRead])

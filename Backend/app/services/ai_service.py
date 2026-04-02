@@ -9,7 +9,7 @@ class AIService:
         """
         Initializes the Semantic Engine.
         - VectorStore: Handles PGVector embeddings and similarity search.
-        - LLMEngine: Interface for Phi-3 (Ollama).
+        - LLMEngine: Interface for Qwen AI (Ollama).
         """
         self.vector_store = VectorStore()
         self.llm_engine = LLMEngine()
@@ -19,7 +19,7 @@ class AIService:
         Executes the AI Semantic Phase of the Governance Pipeline.
         1. Vectorizes the new API.
         2. Searches for functional overlaps.
-        3. Consults Phi-3 for architectural advice.
+        3. Consults AI for architectural advice.
         """
         # Ensure the spec ID is available for the relationship
         db.flush()
@@ -42,7 +42,7 @@ class AIService:
             existing_record, similarity_score = match_data
             print(f"📊 Highest Similarity Found: {round(similarity_score * 100, 2)}%")
             
-            # Fetch the actual content of the 'match' to give context to Phi-3
+            # Fetch the actual content of the 'match' to give context to the AI
             existing_spec = db.query(APISpecification).filter(
                 APISpecification.id == existing_record.specification_id
             ).first()
@@ -59,10 +59,10 @@ class AIService:
             is_redundant = False
             print(f"✅ UNIQUE API: No functional overlap detected.")
 
-        # --- STEP 4: PHI-3 CONSULTATION ---
+        # --- STEP 4: AI CONSULTATION ---
         # We always call the AI so the 'suggestions' field is never empty
         try:
-            print(f"🧠 Consulting Phi-3 for architectural justification...")
+            print(f"🧠 Consulting Qwen AI for architectural justification...")
             ai_fix = self.llm_engine.generate_fix_suggestions(
                 new_intent=text_to_embed,
                 existing_intent=existing_intent,
