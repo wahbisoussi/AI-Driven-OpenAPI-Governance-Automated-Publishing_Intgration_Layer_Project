@@ -32,6 +32,19 @@ services:
       - db
       - ollama
 
+  # Make sure 'wso2am' is indented exactly 2 spaces, just like 'backend'
+  wso2am:
+    build: ./WSO2
+    container_name: api_governance_wso2
+    profiles: ["tools"]
+    ports:
+      - "9443:9443"
+      - "8243:8243"
+      - "8280:8280"
+    volumes:
+      - wso2_data:/home/wso2carbon/wso2am-4.6.0/repository/database
+
 volumes:
   ollama_data:
   db_data:
+  wso2_data:
