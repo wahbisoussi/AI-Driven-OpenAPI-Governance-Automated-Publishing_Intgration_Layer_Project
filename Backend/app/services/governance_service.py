@@ -8,27 +8,22 @@ from app.core.linter import run_spectral_audit
 from app.core.scoring import calculate_structural_score
 from app.services.ai_service import AIService 
 from app.services.governance_gate import evaluate_api_compliance
-# --- NEW: Import the WSO2 client to handle the final lifecycle stage ---
 from app.services.wso2_client import WSO2Client 
 
 MIN_SCORE_FOR_AI = 40 
 
 def run_governance_pipeline(db: Session, title: str, version: str, content: str, user_id: int):
-    """
-    Main orchestration logic. 
-    Matches Activity Diagram: Structural -> Semantic -> Governance Gate -> WSO2 Lifecycle.
-    """
     ai_service = AIService()
 
-    # --- PHASE 0: THE GATEKEEPER (PRE-CHECK) ---
+    # --- PHASE 0: DUPLICATE DETECTION ---
     text_to_embed = ai_service.vector_store._extract_searchable_text(content)
     current_embedding = ai_service.vector_store.get_embedding(text_to_embed)
     match_data = ai_service.vector_store.find_most_similar(db, -1, current_embedding)
     
     if match_data:
-        existing_record, similarity_score = match_data
+        _, similarity_score = match_data
         if similarity_score > 0.98:
-            print(f"🚫 BLOCKING UPLOAD: Exact duplicate detected ({round(similarity_score*100, 2)}%)")
+            print(f"🚫 BLOCKING: Exact duplicate detected ({round(similarity_score*100, 2)}%)")
             return {
                 "status": "REJECTED",
                 "governance_decision": "REJECTED",
@@ -36,7 +31,7 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
                 "ai_analysis": {"similarity": float(similarity_score), "requires_action": True}
             }
 
-    # --- PHASE 1: INITIAL IMPORT ---
+    # --- PHASE 1: INITIAL RECORDING ---
     new_spec = APISpecification(
         title=title, version=version, raw_content=content,
         user_id=user_id, workflow_status=WorkflowStatus.IMPORTED
@@ -49,7 +44,7 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         f.write(content)
 
     try:
-        # --- PHASE 2: VALIDATION ENGINE (STRUCTURAL) ---
+        # --- PHASE 2: STRUCTURAL VALIDATION (Spectral) ---
         raw_violations = run_spectral_audit(temp_file_path)
         audit_results = calculate_structural_score(raw_violations)
         
@@ -70,11 +65,10 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
                 message=v.get("message"), report_id=report.id
             ))
 
-        # --- PHASE 3: AI ENGINE (SEMANTIC MATCHING) ---
+        # --- PHASE 3: SEMANTIC ANALYSIS (AI Engine) ---
         ai_report = None
         similarity_score = 0.0
         if report.score >= MIN_SCORE_FOR_AI: 
-            print(f"🧠 Score {report.score}%: Running AI Analysis...")
             ai_report = ai_service.analyze_api_semantics(db, new_spec)
             if ai_report:
                 similarity_score = float(ai_report.similarity_score)
@@ -97,21 +91,34 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         )
         db.add(gov_report)
 
-        # --- PHASE 5: WSO2 APIM (LIFECYCLE) ---
-        # Matches "Auto-Deploy in Prototype Mode" in your diagram
+        # --- PHASE 5: WSO2 LIFECYCLE (Import -> Prototype -> Test -> Publish) ---
         wso2_api_id = None
         if gate_decision["status"] == "PROTOTYPE_READY":
-            print(f"🚀 Governance Passed! Authorizing WSO2 Publishing...")
+            print(f"🚀 Governance Passed! Orchestrating WSO2 Lifecycle...")
             wso2 = WSO2Client()
+            
+            # Step 1: Import
             wso2_api_id = wso2.import_rest_api(temp_file_path)
             
             if wso2_api_id:
-                # Update status to reflect successful publishing
-                new_spec.workflow_status = WorkflowStatus.PUBLISHED 
-                new_spec.external_id = wso2_api_id 
-                print(f"✅ API Live on WSO2 ID: {wso2_api_id}")
+                # Step 2: Prototype Deployment
+                if wso2.deploy_to_prototype(wso2_api_id):
+                    
+                    # Step 3: Functional Verification
+                    if wso2.run_functional_checks(wso2_api_id):
+                        
+                        # Step 4: Final Publish
+                        if wso2.publish_api(wso2_api_id):
+                            new_spec.workflow_status = WorkflowStatus.PUBLISHED 
+                            new_spec.external_id = wso2_api_id 
+                            print(f"🎊 Lifecycle Success: API is Live.")
+                        else:
+                            print("❌ Publishing failed.")
+                    else:
+                        print("❌ Functional verification failed.")
+                else:
+                    print("❌ Prototype deployment failed.")
 
-        # Final commit for all reports and status changes
         db.commit()
 
         return {
