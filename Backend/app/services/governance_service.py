@@ -8,22 +8,21 @@ from app.core.linter import run_spectral_audit
 from app.core.scoring import calculate_structural_score
 from app.services.ai_service import AIService 
 from app.services.governance_gate import evaluate_api_compliance
+# --- NEW: Import the WSO2 client to handle the final lifecycle stage ---
+from app.services.wso2_client import WSO2Client 
 
 MIN_SCORE_FOR_AI = 40 
 
 def run_governance_pipeline(db: Session, title: str, version: str, content: str, user_id: int):
     """
     Main orchestration logic. 
-    Now includes a 'Gatekeeper' check to block duplicates before saving.
+    Matches Activity Diagram: Structural -> Semantic -> Governance Gate -> WSO2 Lifecycle.
     """
     ai_service = AIService()
 
     # --- PHASE 0: THE GATEKEEPER (PRE-CHECK) ---
-    # We check similarity BEFORE creating any DB records
     text_to_embed = ai_service.vector_store._extract_searchable_text(content)
     current_embedding = ai_service.vector_store.get_embedding(text_to_embed)
-    
-    # We pass -1 because the spec doesn't have an ID yet
     match_data = ai_service.vector_store.find_most_similar(db, -1, current_embedding)
     
     if match_data:
@@ -33,31 +32,24 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
             return {
                 "status": "REJECTED",
                 "governance_decision": "REJECTED",
-                "reason": "Duplicate API: An identical specification already exists in the catalog.",
-                "ai_analysis": {
-                    "similarity": float(similarity_score),
-                    "suggestions": "None - Duplicate blocked.",
-                    "requires_action": True
-                }
+                "reason": "Duplicate API detected in catalog.",
+                "ai_analysis": {"similarity": float(similarity_score), "requires_action": True}
             }
 
-    # --- PHASE 1: INITIAL IMPORT (Proceeding since it's unique) ---
+    # --- PHASE 1: INITIAL IMPORT ---
     new_spec = APISpecification(
-        title=title,
-        version=version,
-        raw_content=content,
-        user_id=user_id,
-        workflow_status=WorkflowStatus.IMPORTED
+        title=title, version=version, raw_content=content,
+        user_id=user_id, workflow_status=WorkflowStatus.IMPORTED
     )
     db.add(new_spec)
-    db.flush() # Assigns ID without full commit
+    db.flush() 
 
     temp_file_path = f"temp_spec_{new_spec.id}.yaml"
     with open(temp_file_path, "w") as f:
         f.write(content)
 
     try:
-        # --- PHASE 2: STRUCTURAL AUDIT ---
+        # --- PHASE 2: VALIDATION ENGINE (STRUCTURAL) ---
         raw_violations = run_spectral_audit(temp_file_path)
         audit_results = calculate_structural_score(raw_violations)
         
@@ -73,26 +65,19 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
 
         for v in audit_results["violations"]:
             sev = Severity.ERROR if v.get("severity") == 0 else Severity.WARNING
-            violation = ViolationDetail(
-                rule_name=v.get("code"),
-                severity=sev,
-                message=v.get("message"),
-                report_id=report.id
-            )
-            db.add(violation)
+            db.add(ViolationDetail(
+                rule_name=v.get("code"), severity=sev,
+                message=v.get("message"), report_id=report.id
+            ))
 
-        # --- PHASE 3: AI SEMANTIC ENGINE ---
+        # --- PHASE 3: AI ENGINE (SEMANTIC MATCHING) ---
         ai_report = None
         similarity_score = 0.0
-
         if report.score >= MIN_SCORE_FOR_AI: 
-            print(f"🧠 Score {report.score}% meets threshold. Running AI for Spec {new_spec.id}...")
-            # We pass the full object now because it exists in the DB (flushed)
+            print(f"🧠 Score {report.score}%: Running AI Analysis...")
             ai_report = ai_service.analyze_api_semantics(db, new_spec)
             if ai_report:
                 similarity_score = float(ai_report.similarity_score)
-        else:
-            print(f"⚠️ Score too low. AI Phase skipped.")
 
         # --- PHASE 4: GOVERNANCE GATE ---
         gate_decision = evaluate_api_compliance(
@@ -111,11 +96,28 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
             reason=gate_decision["reason"]
         )
         db.add(gov_report)
+
+        # --- PHASE 5: WSO2 APIM (LIFECYCLE) ---
+        # Matches "Auto-Deploy in Prototype Mode" in your diagram
+        wso2_api_id = None
+        if gate_decision["status"] == "PROTOTYPE_READY":
+            print(f"🚀 Governance Passed! Authorizing WSO2 Publishing...")
+            wso2 = WSO2Client()
+            wso2_api_id = wso2.import_rest_api(temp_file_path)
+            
+            if wso2_api_id:
+                # Update status to reflect successful publishing
+                new_spec.workflow_status = WorkflowStatus.PUBLISHED 
+                new_spec.external_id = wso2_api_id 
+                print(f"✅ API Live on WSO2 ID: {wso2_api_id}")
+
+        # Final commit for all reports and status changes
         db.commit()
 
         return {
             "spec_id": new_spec.id, 
             "status": new_spec.workflow_status.value, 
+            "wso2_id": wso2_api_id,
             "governance_decision": gate_decision["status"],
             "reason": gate_decision["reason"],
             "ai_analysis": {

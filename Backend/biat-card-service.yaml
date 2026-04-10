@@ -1,0 +1,85 @@
+openapi: 3.0.0
+info:
+  title: BIAT Card Management Service
+  description: "Comprehensive API for managing BIAT customer credit and debit cards. Includes lifecycle operations such as activation, status tracking, and limit management."
+  version: 1.0.1
+  termsOfService: https://api.biat.com.tn/terms/
+  contact:
+    name: BIAT API Governance Team
+    url: https://developer.biat.com.tn/support
+    email: api-governance@biat.com.tn
+  license:
+    name: BIAT Internal Use
+    url: https://api.biat.com.tn/licenses/internal
+
+servers:
+  - url: https://api.biat.com.tn/v1/cards
+    description: Production Gateway
+
+tags:
+  - name: Lifecycle
+    description: Card activation and decommissioning operations.
+
+paths:
+  /activate:
+    post:
+      tags:
+        - Lifecycle
+      summary: Activate a new bank card
+      description: Validates card credentials and sets the status to ACTIVE in the core banking system.
+      operationId: activateCard
+      requestBody:
+        description: Necessary card details for activation
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardActivationRequest'
+      responses:
+        '200':
+          description: Card successfully activated and ready for use.
+        '400':
+          description: Invalid card format or data.
+        '401':
+          description: Authentication failed.
+        '403':
+          description: Permission denied for this card.
+
+components:
+  schemas:
+    CardActivationRequest:
+      type: object
+      required:
+        - card_number
+        - expiry_date
+        - cvv
+      properties:
+        card_number:
+          type: string
+          pattern: '^[0-9]{16}$'
+          description: The 16-digit card number.
+          example: "4521000011112222"
+        expiry_date:
+          type: string
+          format: date
+          description: Expiration date in YYYY-MM-DD format.
+          example: "2028-12-31"
+        cvv:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: Security code on the back of the card.
+          example: "123"
+
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: BIAT Enterprise OAuth2 Flow
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.biat.com.tn/token
+          scopes:
+            write:cards: Ability to modify card status
+
+security:
+  - OAuth2: [write:cards]
