@@ -68,10 +68,13 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         # --- PHASE 3: SEMANTIC ANALYSIS (AI Engine) ---
         ai_report = None
         similarity_score = 0.0
+        ai_suggestions = "AI Skipped (Structural score below threshold)."
+
         if report.score >= MIN_SCORE_FOR_AI: 
             ai_report = ai_service.analyze_api_semantics(db, new_spec)
             if ai_report:
                 similarity_score = float(ai_report.similarity_score)
+                ai_suggestions = ai_report.ai_suggested_fix
 
         # --- PHASE 4: GOVERNANCE GATE ---
         gate_decision = evaluate_api_compliance(
@@ -91,7 +94,7 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         )
         db.add(gov_report)
 
-        # --- PHASE 5: WSO2 LIFECYCLE (Import -> Prototype -> Test -> Publish) ---
+        # --- PHASE 5: WSO2 LIFECYCLE ---
         wso2_api_id = None
         if gate_decision["status"] == "PROTOTYPE_READY":
             print(f"🚀 Governance Passed! Orchestrating WSO2 Lifecycle...")
@@ -101,26 +104,33 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
             wso2_api_id = wso2.import_rest_api(temp_file_path)
             
             if wso2_api_id:
+                # SAFETY PATCH: Link the ID immediately in case of later failures
+                new_spec.external_id = wso2_api_id
+                db.flush() 
+                print(f"✅ Step 1: API Created in WSO2 (ID: {wso2_api_id})")
+
                 # Step 2: Prototype Deployment
                 if wso2.deploy_to_prototype(wso2_api_id):
                     
-                    # Step 3: Functional Verification
+                    # Step 3: Functional Verification (Gateway Connectivity)
                     if wso2.run_functional_checks(wso2_api_id):
                         
                         # Step 4: Final Publish
                         if wso2.publish_api(wso2_api_id):
                             new_spec.workflow_status = WorkflowStatus.PUBLISHED 
-                            new_spec.external_id = wso2_api_id 
-                            print(f"🎊 Lifecycle Success: API is Live.")
+                            print(f"🎊 Lifecycle Success: API is Live and Published.")
                         else:
-                            print("❌ Publishing failed.")
+                            print("⚠️ Step 4 Failed: Could not move to PUBLISHED state.")
                     else:
-                        print("❌ Functional verification failed.")
+                        print("⚠️ Step 3 Failed: Functional/Gateway check failed.")
                 else:
-                    print("❌ Prototype deployment failed.")
+                    print("⚠️ Step 2 Failed: Deployment to Prototype failed.")
+            else:
+                print("❌ Step 1 Failed: API Import to WSO2 failed.")
 
         db.commit()
 
+        # Final response reflects the actual state after WSO2 orchestration
         return {
             "spec_id": new_spec.id, 
             "status": new_spec.workflow_status.value, 
@@ -129,7 +139,7 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
             "reason": gate_decision["reason"],
             "ai_analysis": {
                 "similarity": similarity_score,
-                "suggestions": ai_report.ai_suggested_fix if ai_report else "AI Skipped.",
+                "suggestions": ai_suggestions,
                 "requires_action": gate_decision["status"] in ["AWAITING_FIX_CONFIRMATION", "REJECTED"]
             }
         }
