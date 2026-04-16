@@ -3,26 +3,36 @@ import requests
 
 class LLMEngine:
     def __init__(self):
-        self.url = os.getenv("OLLAMA_URL", "http://ollama:11434/api/generate")
-        # 1. UPGRADE: Switched to the specialized coder model that fits in 8GB RAM
-        self.model = "qwen2.5-coder:1.5b" 
+        # FIX: We check if the URL already contains the path to avoid doubling it
+        raw_url = os.getenv("OLLAMA_URL", "http://ollama:11434").rstrip('/')
+        
+        if "/api/generate" in raw_url:
+            self.url = raw_url
+        else:
+            self.url = f"{raw_url}/api/generate"
+            
+        self.model = "qwen2.5:1.5b" 
 
     def generate_fix_suggestions(self, new_intent: str, existing_intent: str, similarity_score: float, raw_yaml: str) -> str:
         similarity_percent = round(similarity_score * 100, 2)
         
-        # 2. UPGRADE: Formatted the prompt to be sharper for Qwen
         prompt = f"""
-        [SYSTEM: API Governance Expert at BIAT Bank]
-        Context: An API is being uploaded. Similarity to existing APIs: {similarity_percent}%.
+        [SYSTEM: STRICT API SECURITY ARCHITECT AT BIAT BANK]
+        Context: An OpenAPI YAML file is being evaluated. Similarity to existing APIs: {similarity_percent}%.
         
         New API Intent: {new_intent}
-        Existing API Intent: {existing_intent}
         
         Task:
-        - If similarity > 85%, explain why this is a duplicate.
-        - If similarity < 85%, give ONE technical architectural tip (e.g., Security, Validation) to improve the new API.
+        1. If similarity > 85%, state clearly that this is a duplicate and must be merged.
+        2. If similarity < 85%, analyze the provided YAML code below and give ONE highly specific, technical fix. 
+           (Examples: missing OAuth2/JWT security, bad REST path naming conventions, missing 400/404/500 error schemas).
         
-        Constraint: Respond in strictly under 40 words. Be professional.
+        Constraint: Be aggressive and technical. Reference the specific part of the YAML that needs fixing. Keep it under 50 words.
+        
+        YAML TO ANALYZE:
+        ```yaml
+        {raw_yaml}
+        ```
         """
 
         payload = {
@@ -30,23 +40,26 @@ class LLMEngine:
             "prompt": prompt,
             "stream": False,
             "options": {
-                "num_predict": 100,
-                "temperature": 0.3,
+                "num_predict": 150,
+                "temperature": 0.2,
                 "num_thread": 2,
-                "num_ctx": 2048
+                "num_ctx": 3072
             }
         }
 
         try:
-            print(f"🧠 Qwen AI is analyzing API intents...")
+            print(f"🧠 Qwen AI is analyzing the raw YAML code...")
             response = requests.post(self.url, json=payload, timeout=300)
+            
+            if response.status_code == 404:
+                 return f"CRITICAL ERROR: Ollama returned 404. Tried URL: {self.url}. Ensure model '{self.model}' is loaded."
+            
             response.raise_for_status()
             return response.json().get('response', "").strip()
         except Exception as e:
             return f"Governance AI Error: {str(e)}"
 
     def apply_suggestion_to_yaml(self, raw_yaml: str, suggestion: str) -> str:
-        # 3. UPGRADE: The "Aggressive Architect" Prompt. No more lazy copy-pasting.
         prompt = f"""
         [SYSTEM: SENIOR API ARCHITECT - BIAT BANK]
         Your mission is to REFACTOR and OPTIMIZE the provided OpenAPI YAML.
@@ -64,17 +77,16 @@ class LLMEngine:
         REFACTORED YAML (Start with ```yaml):
         """
         
-        # 4. UPGRADE: The "Brain" settings
         payload = {
             "model": self.model,
             "prompt": prompt,
             "stream": False,
             "options": {
-                "num_predict": 1500,       # Increased so it doesn't cut off long YAML files
-                "temperature": 0.4,        # Raised from 0.1 so the AI takes action and changes things
+                "num_predict": 1500,
+                "temperature": 0.4,
                 "num_thread": 2,
-                "num_ctx": 3072,           # Gives the AI a larger "RAM workspace"
-                "presence_penalty": 0.5    # Secret weapon: Penalizes the AI if it just repeats the input
+                "num_ctx": 3072,
+                "presence_penalty": 0.5
             }
         }
 
@@ -84,7 +96,6 @@ class LLMEngine:
             response.raise_for_status()
             full_text = response.json().get('response', "").strip()
             
-            # --- MAGIC PARSER ---
             if "```yaml" in full_text:
                 return full_text.split("```yaml")[1].split("```")[0].strip()
             elif "```" in full_text:

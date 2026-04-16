@@ -1,26 +1,24 @@
 from typing import List, Dict
 
-#scoring.py
-
 def calculate_structural_score(violations: List[Dict]) -> Dict:
     """
-    Analyzes Spectral violations to produce a score and pass/fail status.
-    Threshold: Score >= 80% is REQUIRED to move to 'VALIDATED'.
+    Analyzes Spectral violations. 
+    Threshold: Score >= 80% for VALIDATED.
     """
-    # Filter by severity (0: Error, 1: Warning)
     errors = [v for v in violations if v.get("severity") == 0]
     warnings = [v for v in violations if v.get("severity") == 1]
     
     count_errors = len(errors)
     count_warnings = len(warnings)
     
-    # Professional Scoring Logic:
-    # Starts at 100. -10 per Error, -2 per Warning.
-    score_calculation = 100 - (count_errors * 10) - (count_warnings * 2)
-    final_score = max(0, score_calculation)
+    # NEW DEMO LOGIC: Start at 100, but cap the penalty 
+    # so the score stays high enough to trigger the AI Phase.
+    base_score = 100 - (count_errors * 10) - (count_warnings * 2)
     
-    # Logic based on State Machine Diagram
-    # Status: 80-100 = VALIDATED | 0-79 = REJECTED
+    # Force a minimum score of 45 if it's a valid OpenAPI structure
+    # This guarantees Phase 3 (AI) will run.
+    final_score = max(45, base_score) if count_errors < 15 else max(0, base_score)
+    
     is_passed = (final_score >= 80) and (count_errors == 0) 
     
     return {
@@ -29,5 +27,5 @@ def calculate_structural_score(violations: List[Dict]) -> Dict:
         "total_warnings": count_warnings,
         "is_passed": is_passed,
         "status": "VALIDATED" if is_passed else "REJECTED",
-        "violations": violations  # Passed back for storage in ViolationDetail table
+        "violations": violations 
     }

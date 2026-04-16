@@ -10,6 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
 
   ollama:
     image: ollama/ollama
@@ -26,32 +27,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://postgres:admin123@db:5432/api_governance_db
-      OLLAMA_URL: http://ollama:11434/api/generate 
+      - DATABASE_URL=postgresql://postgres:admin123@db:5432/api_governance_db
+      - OLLAMA_URL=http://ollama:11434
     depends_on:
-      - db
-      - ollama
-
-  wso2am:
-    build: ./WSO2
-    container_name: api_governance_wso2
-    environment:
-      # Providing the heap space needed for UI extraction
-      - JVM_MEM_OPTS=-Xms2g -Xmx3g 
-      - NODE_IP=0.0.0.0
-    ports:
-      - "9443:9443"
-      - "8243:8243"
-      - "8280:8280"
-    volumes:
-      - wso2_data:/home/wso2carbon/wso2am-4.6.0/repository/database
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-    restart: always
+      db:
+        condition: service_started
+      ollama:
+        condition: service_started
 
 volumes:
   ollama_data:
   db_data:
-  wso2_data:
