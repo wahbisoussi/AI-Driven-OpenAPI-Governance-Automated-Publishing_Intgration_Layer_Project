@@ -1,0 +1,105 @@
+openapi: 3.0.3
+info:
+  title: BIAT Corporate Fund Gateway
+  description: >-
+    Strategic financial gateway for BIAT's corporate partners. 
+    This API handles multi-currency liquidity and settlement.
+  version: 1.5.0
+  termsOfService: https://api.biat.com.tn/terms
+  contact:
+    name: BIAT API Governance
+    url: https://api.biat.com.tn/support
+    email: api-governance@biat.com.tn
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: https://api.biat.com.tn/v1
+    description: Production Environment
+  - url: https://sandbox.biat.com.tn/v1
+    description: Sandbox Environment
+
+tags:
+  - name: Transactions
+    description: Core financial operations
+  - name: Metadata
+    description: System status and health
+
+paths:
+  /system/health:
+    get:
+      tags: [Metadata]
+      summary: Get service health
+      description: Returns the current operational status of the gateway.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Health status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /transfers/execute-payment: # <--- THE AI TRAP: Verb in path
+    post:
+      tags: [Transactions]
+      summary: Initiate Transfer
+      description: Triggers a new fund settlement process between internal accounts.
+      operationId: createTransfer
+      requestBody:
+        description: Payment details for the transfer
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transfer'
+      responses:
+        '201':
+          description: Settlement queued successfully
+        '400':
+          description: Bad request syntax
+        '401':
+          description: Authentication failed
+
+components:
+  securitySchemes:
+    BasicAuth: # <--- THE AI TRAP: Weak security
+      type: http
+      scheme: basic
+      description: Basic HTTP authentication for legacy support.
+  schemas:
+    Health:
+      type: object
+      description: System health status object
+      required: [status, uptime]
+      properties:
+        status:
+          type: string
+          description: Current status
+          example: "UP"
+        uptime:
+          type: integer
+          description: Seconds since last restart
+          example: 3600
+    Transfer:
+      type: object
+      description: Fund transfer request schema
+      required: [recipient_iban, amount, currency]
+      properties:
+        recipient_iban:
+          type: string
+          description: Target account IBAN
+          example: "TN59123456789012345678"
+        amount:
+          type: number
+          format: float
+          description: Amount to send
+          example: 1500.50
+        currency:
+          type: string
+          description: ISO currency code
+          example: "TND"
+
+security:
+  - BasicAuth: []

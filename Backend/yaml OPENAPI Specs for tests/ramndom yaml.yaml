@@ -1,0 +1,59 @@
+openapi: 3.0.0
+info:
+  title: BIAT Corporate Banking API
+  description: Internal service for managing corporate fund transfers.
+  version: "1.2.0"
+servers:
+  - url: https://api-gateway.biat.com.tn/v1
+    description: Production Server
+paths:
+  /accounts/get-balance/{account_id}:
+    get:
+      summary: Get account balance
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Balance retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balance'
+  /transfer/execute:
+    post:
+      summary: Create new transfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        '201':
+          description: Transfer created
+security:
+  - BasicAuth: []
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+  schemas:
+    Balance:
+      type: object
+      properties:
+        amount:
+          type: number
+        currency:
+          type: string
+    TransferRequest:
+      type: object
+      properties:
+        to:
+          type: string
+        amount:
+          type: number

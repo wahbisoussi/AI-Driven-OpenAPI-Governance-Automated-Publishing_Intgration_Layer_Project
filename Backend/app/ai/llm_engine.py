@@ -24,11 +24,15 @@ class LLMEngine:
         
         Task:
         1. If similarity > 85%, state clearly that this is a duplicate and must be merged.
-        2. If similarity < 85%, analyze the provided YAML code below and give ONE highly specific, technical fix. 
-           (Examples: missing OAuth2/JWT security, bad REST path naming conventions, missing 400/404/500 error schemas).
+        2. If similarity < 85%, perform a "High-Authority Architectural Audit." Identify ONE critical technical violation. 
+        Focus strictly on these priorities:
+        - GOVERNANCE: Enforce strict REST Resource modeling. Mandate NOUNS for paths and eliminate all VERBS (e.g., replace '/getPayment' or '/post' with '/payments').
+        - SECURITY: If 'BasicAuth' is used or 'security' is missing, demand an upgrade to 'OAuth2/OIDC' for bank-grade compliance.
+        - RESILIENCE: Detect missing 400/401/5xx error response schemas and require their inclusion to ensure contract reliability.
+        3. USABILITY GATE: If the technical structure is sound, verify 'summary' and 'description' tags. If they are generic or missing, demand business-oriented metadata.
         
-        Constraint: Be aggressive and technical. Reference the specific part of the YAML that needs fixing. Keep it under 50 words.
-        
+        Constraint: Be aggressive and technical. Reference the specific part of the YAML that needs fixing. Keep it under 100 words.
+        Output Rule: Provide only ONE fix. Do not provide a list.
         YAML TO ANALYZE:
         ```yaml
         {raw_yaml}

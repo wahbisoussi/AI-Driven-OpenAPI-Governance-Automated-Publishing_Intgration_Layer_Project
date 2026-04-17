@@ -128,16 +128,41 @@ def get_all_specs(db: Session = Depends(get_db)):
     ).all()
     return specs if specs else []
 
+from fastapi.encoders import jsonable_encoder
+
 @router.get("/{spec_id}")
 def get_spec_by_id(spec_id: int, db: Session = Depends(get_db)):
-    spec = db.query(APISpecification).options(
-        joinedload(APISpecification.semantic_analysis),
-        joinedload(APISpecification.structural_report)
-    ).filter(APISpecification.id == spec_id).first()
+    # 1. Fetch the raw object
+    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
     
     if not spec:
         raise HTTPException(status_code=404, detail="API Specification not found.")
-    return spec
+
+    # 2. Convert the main object to a dict, but EXCLUDE the problematic relationship attributes
+    # We will build them manually to ensure no circular loops occur.
+    spec_data = {
+        "id": spec.id,
+        "title": spec.title,
+        "version": spec.version,
+        "raw_content": spec.raw_content,
+        "workflow_status": spec.workflow_status.value if spec.workflow_status else None,
+        "created_at": spec.created_at.isoformat() if spec.created_at else None,
+        "suggestions_applied": spec.suggestions_applied,
+        "user_justification": spec.user_justification,
+        "user_id": spec.user_id
+    }
+
+    # 3. Safely add Semantic Analysis if it exists
+    if spec.semantic_analysis:
+        spec_data["semantic_analysis"] = {
+            "id": spec.semantic_analysis.id,
+            "is_redundant": spec.semantic_analysis.is_redundant,
+            "similarity_score": spec.semantic_analysis.similarity_score,
+            "ai_suggested_fix": spec.semantic_analysis.ai_suggested_fix
+        }
+
+    # 4. Use jsonable_encoder to clean up any remaining non-JSON types
+    return jsonable_encoder(spec_data)
 
 # --- 5. DELETE METHODS (CRUD) ---
 @router.delete("/{spec_id}")
