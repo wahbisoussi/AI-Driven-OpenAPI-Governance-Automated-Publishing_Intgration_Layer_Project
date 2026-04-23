@@ -16,6 +16,7 @@ class APISpecification(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user_id = Column(Integer, ForeignKey("users.id"))
+    external_id = Column(String, nullable=True)
     
     # --- FIXED RELATIONSHIPS ---
     # These names (structural_report, governance_report) are what the other files 

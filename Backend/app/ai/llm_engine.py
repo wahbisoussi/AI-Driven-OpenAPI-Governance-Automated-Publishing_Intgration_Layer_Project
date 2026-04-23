@@ -93,18 +93,21 @@ class LLMEngine:
                 "presence_penalty": 0.5
             }
         }
-
+        
         try:
             print(f"🪄 AI Architect is refactoring the YAML...")
             response = requests.post(self.url, json=payload, timeout=300)
             response.raise_for_status()
             full_text = response.json().get('response', "").strip()
             
+            # --- SAFETY GUARD: Check if it's actually YAML ---
+            if "openapi" not in full_text.lower():
+                print("⚠️ AI returned non-YAML content. Falling back to original spec.")
+                return raw_yaml
+            
             if "```yaml" in full_text:
                 return full_text.split("```yaml")[1].split("```")[0].strip()
-            elif "```" in full_text:
-                return full_text.split("```")[1].split("```")[0].strip()
-            
             return full_text 
         except Exception as e:
-            return f"Refactoring Error: {str(e)}"
+            print(f"❌ AI Refactor failed: {e}")
+            return raw_yaml

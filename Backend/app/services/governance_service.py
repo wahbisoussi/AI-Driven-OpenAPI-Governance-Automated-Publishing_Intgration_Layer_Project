@@ -9,6 +9,9 @@ from app.core.scoring import calculate_structural_score
 from app.services.ai_service import AIService 
 from app.services.governance_gate import evaluate_api_compliance
 
+# --- UPDATED: IMPORT WSO2 FUNCTION ---
+from app.services.publisher_service import import_api_from_yaml 
+
 # Threshold for triggering the AI
 MIN_SCORE_FOR_AI = 10
 
@@ -102,10 +105,13 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         )
         db.add(gov_report)
 
-        # --- PHASE 5: WSO2 ORCHESTRATION (DISABLED) ---
-        # wso2_api_id = None
-        # if gate_decision["status"] == "PROTOTYPE_READY":
-        #     print(f"🚀 Governance Passed! (WSO2 logic bypassed for testing)")
+        # --- PHASE 5: WSO2 ORCHESTRATION ---
+        #if gate_decision["status"] == "PROTOTYPE_READY":
+        #    print(f"🚀 Governance Passed! Importing to WSO2...")
+        #    # Fixed indentation: Call our new Phase 2 function
+        #    wso2_id = import_api_from_yaml(temp_file_path)
+        #    if wso2_id:
+        #         new_spec.external_id = wso2_id
 
         db.commit()
 

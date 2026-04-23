@@ -1,8 +1,8 @@
 openapi: 3.0.1
 info:
-  title: BIAT Retail Banking - Accounts API
+  title: BIAT Final Success Demo  # New title for a fresh start
   description: Professional API for managing customer bank accounts and transactions.
-  version: 2026-03-03 # Microsoft standard YYYY-MM-DD
+  version: 2026-04-22 # Fix: Now follows the YYYY-MM-DD format required by your rules
   contact:
     name: BIAT IT Support
     email: api-support@biat.com.tn
@@ -12,14 +12,14 @@ servers:
     description: Production Server
 
 paths:
-  /account-details/{accountId}:
+  /account-details/{accountId}: # Trap: AI will refactor this to /account/{accountId}
     get:
       tags:
         - Accounts
       summary: Retrieves specific account details
       operationId: Accounts_GetDetails
       security:
-        - OAuth2: [read]
+        - OAuth2: [read_pfe_success] # Unique scope name
       parameters:
         - name: accountId
           in: path
@@ -36,8 +36,6 @@ paths:
                 $ref: '#/components/schemas/Account'
         '400':
           description: Invalid Request
-        default:
-          description: Unexpected error handler.
 
   /accounts/transfers:
     post:
@@ -46,7 +44,7 @@ paths:
       summary: Create a money transfer between accounts
       operationId: Transactions_CreateTransfer
       security:
-        - OAuth2: [write]
+        - OAuth2: [write_pfe_success] # Unique scope name
       requestBody:
         description: Required data for the fund transfer.
         required: true
@@ -57,10 +55,6 @@ paths:
       responses:
         '201':
           description: Transfer created successfully
-        '400':
-          description: Bad request
-        default:
-          description: An unexpected error occurred.
 
 components:
   securitySchemes:
@@ -71,41 +65,23 @@ components:
         clientCredentials:
           tokenUrl: https://api.biat.com.tn/token
           scopes:
-            read: Read account data
-            write: Perform transfers
+            read_pfe_success: Read account data
+            write_pfe_success: Perform transfers
 
   schemas:
     Account:
       type: object
       title: Account
-      description: Representation of a customer bank account.
       properties:
-        accountId:
-          type: string
-          description: Unique ID of the account.
-        accountType:
-          type: string
-          enum: [SAVINGS, CHECKING, LOAN]
-          description: The category of account.
-        balance:
-          type: number
-          description: Current available balance.
-        currency:
-          type: string
-          default: TND
-          description: ISO currency code.
+        accountId: { type: string }
+        accountType: { type: string, enum: [SAVINGS, CHECKING, LOAN] }
+        balance: { type: number }
+        currency: { type: string, default: TND }
 
     TransferRequest:
       type: object
       title: TransferRequest
-      description: "Data required to initiate a fund transfer."
       properties:
-        sourceAccount:
-          type: string
-          description: "The unique identifier for the source bank account."
-        destinationAccount:
-          type: string
-          description: "The unique identifier for the recipient bank account."
-        amount:
-          type: number
-          description: "The total amount to be transferred in TND."
+        sourceAccount: { type: string }
+        destinationAccount: { type: string }
+        amount: { type: number }

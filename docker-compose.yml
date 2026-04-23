@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   db:
     image: pgvector/pgvector:pg15
@@ -26,9 +28,13 @@ services:
     container_name: api_governance_backend
     ports:
       - "8000:8000"
+    env_file:
+      - ./Backend/.env 
     environment:
       - DATABASE_URL=postgresql://postgres:admin123@db:5432/api_governance_db
       - OLLAMA_URL=http://ollama:11434
+      - WSO2_CLIENT_ID=9NM3RiuUjzyNu7IMmufPDqbdAmEa
+      - WSO2_CLIENT_SECRET=DR2Icc26QNnVgolFsUCRyX5dKkca
     depends_on:
       db:
         condition: service_started
