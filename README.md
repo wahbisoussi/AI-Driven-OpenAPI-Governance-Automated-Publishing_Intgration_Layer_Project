@@ -75,7 +75,7 @@ An API only reaches production if it passes **all four gates**.
 
 ### System Responsibilities
 
-![Activity Diagram](Docs/activity Diagram PFE.png)
+![Activity Diagram](docs/activityDiagramPFE.png)
 
 The system is divided into four zones:
 
