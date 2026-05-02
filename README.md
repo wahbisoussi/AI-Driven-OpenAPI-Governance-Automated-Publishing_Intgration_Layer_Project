@@ -28,7 +28,7 @@ that every API specification must pass before reaching the production catalog.
 
 Every OpenAPI specification submitted goes through four sequential gates:
 
-[C4 Model Of the Project](Docs/ContainersC4Modelpng)
+[C4 Model Of the Project](Docs/ContainersC4Model.png)
 
 ```
 Developer submits spec
