@@ -28,6 +28,8 @@ that every API specification must pass before reaching the production catalog.
 
 Every OpenAPI specification submitted goes through four sequential gates:
 
+[C4 Model Of the Project](Docs/ContainersC4Modelpng)
+
 ```
 Developer submits spec
         │
@@ -86,7 +88,7 @@ The system is divided into four zones:
 
 ### Request Lifecycle
 
-![Sequence Diagram](docs/Sequence%20Diagram_6.png)
+![Sequence Diagram](Docs/SequenceDiagram.png)
 
 The FastAPI engine acts as the central orchestrator managing asynchronous communication between:
 - **PostgreSQL + PGVector** — spec storage and embedding retrieval
@@ -95,7 +97,7 @@ The FastAPI engine acts as the central orchestrator managing asynchronous commun
 
 ### API Spec State Machine
 
-![State Machine](docs/State%20Machine%20Diagram_2.png)
+![State Machine](Docs/StateMachineDiagram.png)
 
 Each specification moves through tracked states. **PUBLISHED** status is only reached when:
 - **Similarity Score < 85%** — confirms uniqueness against existing catalog
