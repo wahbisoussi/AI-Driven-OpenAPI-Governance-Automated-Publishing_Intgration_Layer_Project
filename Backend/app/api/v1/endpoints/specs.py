@@ -67,23 +67,18 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
                 f.write(spec.raw_content)
 
             try:
-                # 1. Import (Clean slate + upload fixed YAML)
+                # import_api_from_yaml already runs full lifecycle internally
                 wso2_id = import_api_from_yaml(final_temp_path)
                 
                 if wso2_id:
                     spec.external_id = wso2_id
-                    
-                    # 🚀 UPDATED: Catching success AND message for better logging
-                    success, message = publish_api_full_lifecycle(wso2_id)
-                    
-                    if success:
-                        spec.workflow_status = WorkflowStatus.PUBLISHED
-                        print(f"🏆 {message}")
-                    else:
-                        print(f"⚠️ Lifecycle issue: {message}")
-                        spec.workflow_status = WorkflowStatus.CREATED 
-                    
-                    db.commit()
+                    spec.workflow_status = WorkflowStatus.PUBLISHED
+                    print(f"🏆 WSO2 published: {wso2_id}")
+                else:
+                    spec.workflow_status = WorkflowStatus.DEPLOYMENT_FAILED
+                    print(f"❌ WSO2 import failed")
+                
+                db.commit()
             finally:
                 if os.path.exists(final_temp_path):
                     os.remove(final_temp_path)
