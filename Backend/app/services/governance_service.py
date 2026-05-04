@@ -118,12 +118,12 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
                     db.commit()
                 else:
                     print(f"❌ WSO2 DEPLOYMENT FAILED")
-                    new_spec.workflow_status = WorkflowStatus.DEPLOYMENT_FAILED
+                    new_spec.workflow_status = WorkflowStatus.REJECTED
                     db.commit()
                     
             except Exception as deploy_error:
                 print(f"❌ DEPLOYMENT EXCEPTION: {deploy_error}")
-                new_spec.workflow_status = WorkflowStatus.DEPLOYMENT_FAILED
+                new_spec.workflow_status = WorkflowStatus.REJECTED
                 db.commit()
         else:
             print(f"🚫 GOVERNANCE REJECTED: Skipping WSO2 deployment")

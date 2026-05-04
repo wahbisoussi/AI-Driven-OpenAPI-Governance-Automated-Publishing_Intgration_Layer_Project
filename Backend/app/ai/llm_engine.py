@@ -187,7 +187,6 @@ class LLMEngine:
                                 if isinstance(params_source, list):
                                     for p in params_source:
                                         if isinstance(p, dict):
-                                            # Ensure required fields are present
                                             param = {
                                                 "name": p.get("name", "param"),
                                                 "in": p.get("in", "query"),
@@ -195,7 +194,8 @@ class LLMEngine:
                                                 "schema": p.get("schema", {"type": "string"})
                                             }
                                             valid_params.append(param)
-                            method_block["parameters"] = valid_params
+                                if valid_params:
+                                    method_block["parameters"] = valid_params
 
                         clean["paths"][clean_path][method.lower()] = method_block
 

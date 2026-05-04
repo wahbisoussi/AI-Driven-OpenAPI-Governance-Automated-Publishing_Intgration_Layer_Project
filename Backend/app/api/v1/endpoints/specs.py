@@ -75,7 +75,7 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
                     spec.workflow_status = WorkflowStatus.PUBLISHED
                     print(f"🏆 WSO2 published: {wso2_id}")
                 else:
-                    spec.workflow_status = WorkflowStatus.DEPLOYMENT_FAILED
+                    spec.workflow_status = WorkflowStatus.REJECTED
                     print(f"❌ WSO2 import failed")
                 
                 db.commit()

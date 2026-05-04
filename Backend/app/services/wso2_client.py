@@ -8,6 +8,42 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 load_dotenv()
 
+def get_wso2_user_token():
+    """
+    Retrieves the OAuth2 token using Password Grant (user context).
+    Required for lifecycle changes — WSO2 logs the user who published.
+    """
+    url = "https://host.docker.internal:9443/oauth2/token"
+
+    client_id = os.getenv("WSO2_CLIENT_ID")
+    client_secret = os.getenv("WSO2_CLIENT_SECRET")
+    username = os.getenv("WSO2_ADMIN_USERNAME", "admin")
+    password = os.getenv("WSO2_ADMIN_PASSWORD", "admin")
+
+    data = {
+        "grant_type": "password",
+        "username": username,
+        "password": password,
+        "scope": "apim:api_publish apim:api_view apim:api_create apim:api_manage apim:api_import_export"
+    }
+
+    try:
+        response = requests.post(
+            url,
+            auth=(client_id, client_secret),
+            data=data,
+            verify=False,
+            timeout=10
+        )
+        if response.status_code != 200:
+            print(f"❌ User Token Failed: {response.status_code} - {response.text}")
+            return None
+        return response.json().get("access_token")
+    except Exception as e:
+        print(f"❌ WSO2 User Token Error: {e}")
+        return None
+
+
 def get_wso2_access_token():
     """
     Retrieves the OAuth2 token from WSO2 using Client Credentials.

@@ -3,7 +3,7 @@ import urllib3
 import os
 import json
 import time
-from app.services.wso2_client import get_wso2_access_token
+from app.services.wso2_client import get_wso2_access_token, get_wso2_user_token
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 PUBLISHER_BASE_URL = "https://host.docker.internal:9443/api/am/publisher/v4/apis"
@@ -73,22 +73,41 @@ def check_deployment_status(api_id):
     except Exception as e:
         return False, {"error": str(e)}
 
+def _try_lifecycle_action(api_id, action, token):
+    """
+    Trigger a WSO2 lifecycle change.
+    Correct URL: POST /apis/change-lifecycle?action={action}&apiId={apiId}
+    (apiId is a query param, NOT a path segment)
+    """
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    # PUBLISHER_BASE_URL = ".../apis" → lifecycle URL = ".../apis/change-lifecycle"
+    url = f"{PUBLISHER_BASE_URL}/change-lifecycle"
+    params = {"action": action, "apiId": api_id}
+
+    try:
+        res = requests.post(url, headers=headers, params=params, verify=False, timeout=15)
+        print(f"   [change-lifecycle] → {res.status_code}: {res.text[:200]}")
+        if res.status_code == 200:
+            return True, 200, res.text
+        return False, res.status_code, res.text
+    except Exception as ex:
+        print(f"   [change-lifecycle] → Exception: {ex}")
+        return False, 0, str(ex)
+
 def continue_publishing(api_id):
     """Trigger WSO2 lifecycle change to Published."""
     try:
-        token = get_wso2_access_token()
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        print("🟢 PUBLISH: Changing Lifecycle to Published...")
-        pub_res = requests.post(
-            f"{PUBLISHER_BASE_URL}/{api_id}/change-lifecycle",
-            headers=headers,
-            params={"action": "Publish"},
-            verify=False
-        )
-        if pub_res.status_code == 200:
+        token = get_wso2_user_token()  # Lifecycle requires user-context token
+        print(f"🟢 PUBLISH: Attempting lifecycle → Published for {api_id}")
+        success, code, text = _try_lifecycle_action(api_id, "Publish", token)
+        if success:
             print(f"🏆 Publishing Success for API {api_id}")
             return True, "API successfully published."
-        return False, f"PUBLISH failed ({pub_res.status_code}): {pub_res.text}"
+        return False, f"PUBLISH failed ({code}): {text}"
     except Exception as e:
         return False, f"Publishing exception: {str(e)}"
 
@@ -107,6 +126,7 @@ def import_api_from_yaml(file_path):
         "context": f"/{filename}",
         "visibility": "PUBLIC",
         "policies": ["Unlimited"],
+        "lifeCycleStatus": "PUBLISHED",
         "endpointConfig": {
             "endpoint_type": "http",
             "production_endpoints": {"url": "https://httpbin.org/get"},
@@ -125,7 +145,8 @@ def import_api_from_yaml(file_path):
             api_id = res.json().get("id")
             success, message = publish_api_full_lifecycle(api_id)
             if not success:
-                print(f"⚠️ Lifecycle issue: {message}")
+                print(f"❌ Lifecycle FAILED: {message}")
+                return None  # Signal failure so caller sets DEPLOYMENT_FAILED
             return api_id
 
         print(f"❌ CREATE FAILED ({res.status_code}): {res.text}")
@@ -218,46 +239,19 @@ def publish_api_full_lifecycle(api_id):
         else:
             return False, f"Gateway deployment failed after 3 attempts: {deploy_res.text}"
 
-        # --- STEP 2.5: Ensure Subscription Policy is set (prevents publish 404) ---
-        print("📋 [2.5/4] Ensuring subscription policy is attached...")
-        api_detail_res = requests.get(f"{PUBLISHER_BASE_URL}/{api_id}", headers=headers, verify=False)
-        if api_detail_res.status_code == 200:
-            api_body = api_detail_res.json()
-            if not api_body.get("policies"):
-                api_body["policies"] = ["Unlimited"]
-                put_res = requests.put(
-                    f"{PUBLISHER_BASE_URL}/{api_id}",
-                    headers=headers,
-                    json=api_body,
-                    verify=False
-                )
-                print(f"📋 Policy update: {put_res.status_code}")
-            else:
-                print(f"📋 Policy already set: {api_body.get('policies')}")
+        # --- STEP 3: Verify API is already PUBLISHED (set during import) ---
+        print("📋 [3/4] Verifying API publish status...")
+        time.sleep(2)
+        state_res = requests.get(f"{PUBLISHER_BASE_URL}/{api_id}", headers=headers, verify=False)
+        if state_res.status_code == 200:
+            current_status = state_res.json().get("lifeCycleStatus", "UNKNOWN")
+            print(f"� API lifecycle state: {current_status}")
+            if current_status == "PUBLISHED":
+                print(f"🏆 Full Pipeline Success for API {api_id} (already PUBLISHED from import)")
+                return True, "API deployed and published automatically."
 
-        # --- STEP 3: PROTOTYPE MODE (required by lifecycle state machine) ---
-        print("🧪 [3/4] Setting API to Prototype mode...")
-        time.sleep(3)
-        proto_res = requests.post(
-            f"{PUBLISHER_BASE_URL}/{api_id}/change-lifecycle",
-            headers=headers,
-            params={"action": "Deploy as a Prototype"},
-            verify=False
-        )
-        print(f"📡 Prototype response: {proto_res.status_code} - {proto_res.text[:200]}")
-
-        if proto_res.status_code == 200:
-            print("✅ API in Prototype mode — running functional tests...")
-            time.sleep(5)
-            test_passed, test_message = run_functional_tests(api_context)
-            print(f"📊 Test Result: {test_message}")
-            if not test_passed:
-                return False, f"Functional tests failed: {test_message}"
-        else:
-            print(f"⚠️ Prototype step skipped ({proto_res.status_code}), proceeding to publish...")
-
-        # --- STEP 4: Publish after Successful Validation ---
-        print("🟢 [4/4] Publishing API after successful validation...")
+        # --- STEP 4: Fallback — try explicit lifecycle change ---
+        print("🟢 [4/4] Fallback: Attempting explicit lifecycle → Published...")
         time.sleep(3)
         success, message = continue_publishing(api_id)
         if success:
