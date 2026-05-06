@@ -121,8 +121,9 @@ Each specification moves through tracked states. **PUBLISHED** status is only re
 
 ## Frontend Dashboard
 
-The React dashboard gives developers real-time visibility into the governance process:
+> 🚧 **In Progress** — React dashboard is currently under development.
 
+Planned features:
 - **Governance Scorecards** — Visual structural and semantic compliance scores per spec
 - **AI Fix Panel** — Live suggestions from Qwen 2.5 to resolve validation failures without resubmission
 - **Spec Management** — Browse and manage all specifications stored in PGVector
@@ -172,8 +173,10 @@ Create a `.env` file in the root directory:
 
 ```env
 WSO2_HOST=https://localhost:9443
-WSO2_USERNAME=admin
-WSO2_PASSWORD=admin
+WSO2_ADMIN_USERNAME=admin
+WSO2_ADMIN_PASSWORD=admin
+WSO2_CLIENT_ID=your_wso2_oauth2_client_id
+WSO2_CLIENT_SECRET=your_wso2_oauth2_client_secret
 DATABASE_URL=postgresql://user:pass@db:5432/gov_db
 ```
 

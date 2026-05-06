@@ -149,7 +149,25 @@ def get_governance_stats(db: Session = Depends(get_db)):
         "average_health_score": round(float(avg_score), 2)
     }
 
-# --- 4. SYSTEM CLEANUP ---
+# --- 4. DELETE BY ID ---
+@router.delete("/{spec_id}")
+def delete_spec_by_id(spec_id: int, db: Session = Depends(get_db)):
+    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
+    if not spec:
+        raise HTTPException(status_code=404, detail="API Specification not found.")
+    try:
+        db.execute(text(f"DELETE FROM violation_details WHERE report_id IN (SELECT id FROM structural_reports WHERE api_spec_id = {spec_id})"))
+        db.execute(text(f"DELETE FROM structural_reports WHERE api_spec_id = {spec_id}"))
+        db.execute(text(f"DELETE FROM governance_reports WHERE api_spec_id = {spec_id}"))
+        db.execute(text(f"DELETE FROM semantic_analysis WHERE api_spec_id = {spec_id}"))
+        db.delete(spec)
+        db.commit()
+        return {"detail": f"Spec {spec_id} deleted successfully.", "status": "SUCCESS"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- 5. SYSTEM CLEANUP ---
 @router.delete("/all/clear-database")
 def delete_all_specs(db: Session = Depends(get_db)):
     try:
