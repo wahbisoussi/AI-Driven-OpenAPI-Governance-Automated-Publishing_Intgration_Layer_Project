@@ -2,13 +2,30 @@ import { useState, useRef, useCallback } from 'react';
 import {
   Box, Typography, Button, LinearProgress, Paper, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Alert, CircularProgress, Divider, Grid
+  Alert, CircularProgress, Grid, Divider
 } from '@mui/material';
 import {
-  IconCloudUpload, IconCheck, IconX, IconAlertTriangle,
-  IconBrain, IconShieldCheck, IconRocket, IconFileUpload
+  IconCloudUpload, IconCheck, IconX,
+  IconBrain, IconShieldCheck, IconRocket, IconFileUpload, IconAlertCircle
 } from '@tabler/icons-react';
 import axios from 'axios';
+
+// ── Design tokens ──────────────────────────────────────────────────────────
+const C = {
+  navy:    '#1e3a5f',
+  navyLt:  '#eef2f8',
+  navyDk:  '#162d4a',
+  green:   '#16a34a',
+  greenLt: '#dcfce7',
+  red:     '#dc2626',
+  redLt:   '#fee2e2',
+  amber:   '#d97706',
+  amberLt: '#fffbeb',
+  slate:   '#64748b',
+  border:  '#e2e8f0',
+  bg:      '#f8fafc',
+  card:    '#ffffff',
+};
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -34,53 +51,64 @@ const severityLabel = (sev) => {
 
 function StepBar({ current }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, gap: 0 }}>
-      {STEPS.map((step, idx) => {
-        const done = current > step.id;
-        const active = current === step.id;
-        return (
-          <Box key={step.id} sx={{ display: 'flex', alignItems: 'center', flex: idx < STEPS.length - 1 ? 1 : 'none' }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 60 }}>
-              <Box sx={{
-                width: 36, height: 36, borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                bgcolor: done ? '#1e3a5f' : active ? '#1e3a5f' : '#e2e8f0',
-                color: done || active ? '#fff' : '#94a3b8',
-                fontWeight: 700, fontSize: 14, border: active ? '2px solid #1e3a5f' : 'none'
-              }}>
-                {done ? <IconCheck size={16} /> : step.id}
+    <Paper variant="outlined" sx={{ p: 2.5, mb: 3, border: `1px solid ${C.border}`, borderRadius: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        {STEPS.map((step, idx) => {
+          const done = current > step.id;
+          const active = current === step.id;
+          return (
+            <Box key={step.id} sx={{ display: 'flex', alignItems: 'center', flex: idx < STEPS.length - 1 ? 1 : 'none' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  bgcolor: done ? C.green : active ? C.navy : C.border,
+                  color: done || active ? '#fff' : C.slate,
+                  fontWeight: 700, fontSize: 13,
+                  boxShadow: active ? `0 0 0 4px ${C.navyLt}` : 'none',
+                  transition: 'all 0.3s'
+                }}>
+                  {done ? <IconCheck size={15} strokeWidth={3} /> : step.id}
+                </Box>
+                <Typography sx={{
+                  fontSize: 12, fontWeight: active ? 700 : 500,
+                  color: done ? C.green : active ? C.navy : C.slate,
+                  display: { xs: 'none', sm: 'block' }
+                }}>
+                  {step.label}
+                </Typography>
               </Box>
-              <Typography sx={{ fontSize: 11, mt: 0.5, color: active ? '#1e3a5f' : '#94a3b8', fontWeight: active ? 700 : 400 }}>
-                {step.label}
-              </Typography>
+              {idx < STEPS.length - 1 && (
+                <Box sx={{ flex: 1, height: 1.5, mx: 1.5, borderRadius: 1,
+                  bgcolor: done ? C.green : C.border, transition: 'background 0.3s' }} />
+              )}
             </Box>
-            {idx < STEPS.length - 1 && (
-              <Box sx={{ flex: 1, height: 2, bgcolor: done ? '#1e3a5f' : '#e2e8f0', mx: 1, mb: 2 }} />
-            )}
-          </Box>
-        );
-      })}
-    </Box>
+          );
+        })}
+      </Box>
+    </Paper>
   );
 }
 
-function ScoreGauge({ score, size = 120 }) {
-  const color = score >= 80 ? '#22c55e' : score >= 50 ? '#f97316' : '#ef4444';
-  const radius = (size / 2) - 10;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
+function ScoreGauge({ score }) {
+  const color = score >= 80 ? C.green : score >= 50 ? C.amber : C.red;
+  const colorLt = score >= 80 ? C.greenLt : score >= 50 ? C.amberLt : C.redLt;
+  const label = score >= 80 ? 'Excellent' : score >= 50 ? 'Fair' : 'Poor';
   return (
-    <Box sx={{ position: 'relative', width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', position: 'absolute' }}>
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#e2e8f0" strokeWidth={10} />
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={10}
-          strokeDasharray={circumference} strokeDashoffset={offset}
-          style={{ transition: 'stroke-dashoffset 1s ease' }} strokeLinecap="round" />
-      </svg>
-      <Box sx={{ textAlign: 'center', zIndex: 1 }}>
-        <Typography sx={{ fontWeight: 800, fontSize: size / 5, color, lineHeight: 1 }}>{score}%</Typography>
-        <Typography sx={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Score</Typography>
+    <Box sx={{ textAlign: 'center', py: 2 }}>
+      <Box sx={{ position: 'relative', display: 'inline-flex', mb: 1.5 }}>
+        <svg width={120} height={120} style={{ transform: 'rotate(-90deg)' }}>
+          <circle cx={60} cy={60} r={50} fill="none" stroke={C.border} strokeWidth={10} />
+          <circle cx={60} cy={60} r={50} fill="none" stroke={color} strokeWidth={10}
+            strokeDasharray={314} strokeDashoffset={314 - (score / 100) * 314}
+            style={{ transition: 'stroke-dashoffset 1.2s ease' }} strokeLinecap="round" />
+        </svg>
+        <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <Typography sx={{ fontWeight: 800, fontSize: 26, color, lineHeight: 1 }}>{score}</Typography>
+          <Typography sx={{ fontSize: 10, color: C.slate, textTransform: 'uppercase', letterSpacing: 1 }}>/ 100</Typography>
+        </Box>
       </Box>
+      <Chip label={label} size="small" sx={{ bgcolor: colorLt, color, fontWeight: 700, fontSize: 11 }} />
     </Box>
   );
 }
@@ -165,8 +193,16 @@ export default function UploadPipeline() {
 
   return (
     <Box>
-      <Typography variant="h3" sx={{ mb: 0.5, color: '#1e3a5f', fontWeight: 700 }}>New API Pipeline</Typography>
-      <Typography sx={{ color: '#64748b', mb: 3 }}>Upload your OpenAPI specification to begin the governance audit.</Typography>
+      {/* Page header */}
+      <Box sx={{ mb: 3 }}>
+        <Typography sx={{ fontSize: 11, fontWeight: 600, color: C.slate, textTransform: 'uppercase', letterSpacing: 1.5, mb: 0.5 }}>
+          Governance Pipeline
+        </Typography>
+        <Typography variant="h3" sx={{ color: C.navy, fontWeight: 800, mb: 0.5, fontSize: 24 }}>New API Submission</Typography>
+        <Typography sx={{ color: C.slate, fontSize: 13 }}>
+          Upload your OpenAPI specification to run the full automated governance audit.
+        </Typography>
+      </Box>
 
       <StepBar current={step} />
 
@@ -174,13 +210,13 @@ export default function UploadPipeline() {
       {step === 1 && (
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
-            <Paper sx={{ p: 3, borderRadius: 3 }}>
-              <Typography variant="h5" sx={{ mb: 1, fontWeight: 600 }}>Import API Definition</Typography>
-              <Typography sx={{ color: '#64748b', mb: 2, fontSize: 13 }}>
-                Upload your OpenAPI (Swagger) JSON or YAML file to begin the governance audit.
+            <Paper variant="outlined" sx={{ p: 3.5, borderRadius: 2, border: `1px solid ${C.border}` }}>
+              <Typography sx={{ fontWeight: 700, fontSize: 15, color: C.navy, mb: 0.5 }}>Import API Definition</Typography>
+              <Typography sx={{ color: C.slate, mb: 2.5, fontSize: 13 }}>
+                Supported formats: OpenAPI 3.x · JSON or YAML · Max 20 MB
               </Typography>
 
-              {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+              {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 1.5 }}>{error}</Alert>}
 
               <Box
                 onDrop={handleDrop}
@@ -188,59 +224,65 @@ export default function UploadPipeline() {
                 onDragLeave={() => setDragging(false)}
                 onClick={() => inputRef.current.click()}
                 sx={{
-                  border: `2px dashed ${dragging ? '#1e3a5f' : file ? '#22c55e' : '#cbd5e1'}`,
-                  borderRadius: 3, p: 5, textAlign: 'center', cursor: 'pointer',
-                  bgcolor: dragging ? '#f0f4ff' : file ? '#f0fdf4' : '#f8fafc',
-                  transition: 'all 0.2s', mb: 2
+                  border: `2px dashed ${dragging ? C.navy : file ? C.green : C.border}`,
+                  borderRadius: 2, p: 5, textAlign: 'center', cursor: 'pointer',
+                  bgcolor: dragging ? C.navyLt : file ? C.greenLt : C.bg,
+                  transition: 'all 0.2s', mb: 2.5
                 }}>
                 <input ref={inputRef} type="file" accept=".yaml,.yml,.json" hidden onChange={e => setFile(e.target.files[0])} />
                 {file ? (
                   <>
-                    <IconCheck size={40} color="#22c55e" />
-                    <Typography sx={{ mt: 1, fontWeight: 600, color: '#22c55e' }}>{file.name}</Typography>
-                    <Typography sx={{ fontSize: 12, color: '#64748b' }}>{(file.size / 1024).toFixed(1)} KB · Click to change</Typography>
+                    <Box sx={{ width: 48, height: 48, borderRadius: '50%', bgcolor: C.greenLt, display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 1.5 }}>
+                      <IconCheck size={24} color={C.green} strokeWidth={2.5} />
+                    </Box>
+                    <Typography sx={{ fontWeight: 700, color: C.navy, fontSize: 14 }}>{file.name}</Typography>
+                    <Typography sx={{ fontSize: 12, color: C.slate, mt: 0.5 }}>{(file.size / 1024).toFixed(1)} KB · Click to change</Typography>
                   </>
                 ) : (
                   <>
-                    <IconCloudUpload size={40} color="#94a3b8" />
-                    <Typography sx={{ mt: 1, fontWeight: 600, color: '#475569' }}>Drag and drop file here</Typography>
-                    <Typography sx={{ fontSize: 12, color: '#94a3b8' }}>Limit 20MB per file · JSON or YAML</Typography>
+                    <Box sx={{ width: 48, height: 48, borderRadius: '50%', bgcolor: C.navyLt, display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 1.5 }}>
+                      <IconCloudUpload size={22} color={C.navy} />
+                    </Box>
+                    <Typography sx={{ fontWeight: 600, color: C.navy, fontSize: 14 }}>Drop your file here</Typography>
+                    <Typography sx={{ fontSize: 12, color: C.slate, mt: 0.5 }}>or click to browse</Typography>
                   </>
                 )}
               </Box>
 
               <Button
-                fullWidth variant="contained"
-                disabled={!file}
-                onClick={handleSubmit}
-                startIcon={<IconFileUpload size={18} />}
-                sx={{ bgcolor: '#1e3a5f', '&:hover': { bgcolor: '#162d4a' }, py: 1.5, borderRadius: 2, fontWeight: 600 }}>
+                fullWidth variant="contained" disabled={!file} onClick={handleSubmit}
+                startIcon={<IconFileUpload size={16} />}
+                sx={{ bgcolor: C.navy, '&:hover': { bgcolor: C.navyDk }, py: 1.4, borderRadius: 1.5, fontWeight: 700, fontSize: 14, textTransform: 'none', boxShadow: 'none' }}>
                 Run Governance Pipeline
               </Button>
             </Paper>
           </Grid>
 
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, borderRadius: 3, mb: 2 }}>
+            <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, border: `1px solid ${C.border}`, mb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <IconShieldCheck size={20} color="#1e3a5f" />
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>Ruleset Active</Typography>
+                <IconShieldCheck size={18} color={C.navy} />
+                <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy }}>Active Ruleset</Typography>
               </Box>
-              {['Microsoft REST Guidelines', 'Spectral OAS Linter', 'BIAT Security Rules', 'Documentation Rules'].map(r => (
-                <Box key={r} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1, borderBottom: '1px solid #f1f5f9' }}>
-                  <Typography sx={{ fontSize: 13 }}>{r}</Typography>
-                  <Chip label="ON" size="small" sx={{ bgcolor: '#1e3a5f', color: '#fff', fontSize: 10, height: 20 }} />
+              {[['Microsoft REST', 'Guidelines'], ['Spectral OAS', 'Linter'], ['BIAT Security', 'Rules'], ['Documentation', 'Rules']].map(([name, type]) => (
+                <Box key={name} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.2, borderBottom: `1px solid ${C.border}`, '&:last-child': { borderBottom: 0 } }}>
+                  <Box>
+                    <Typography sx={{ fontSize: 12, fontWeight: 600, color: C.navy }}>{name}</Typography>
+                    <Typography sx={{ fontSize: 11, color: C.slate }}>{type}</Typography>
+                  </Box>
+                  <Chip label="ON" size="small" sx={{ bgcolor: C.greenLt, color: C.green, fontWeight: 700, fontSize: 10, height: 20 }} />
                 </Box>
               ))}
             </Paper>
-            <Paper sx={{ p: 3, borderRadius: 3, bgcolor: '#1e3a5f', color: '#fff' }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>Need Help?</Typography>
-              <Typography sx={{ fontSize: 13, opacity: 0.85, mb: 2 }}>
-                Check the BIAT API style guide before importing your definition.
+            <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, bgcolor: C.navy, border: 0 }}>
+              <Typography sx={{ fontWeight: 700, fontSize: 13, color: '#fff', mb: 0.5 }}>Need Help?</Typography>
+              <Typography sx={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', mb: 2, lineHeight: 1.6 }}>
+                Check the BIAT API Style Guide before submitting your definition.
               </Typography>
-              <Button variant="outlined" fullWidth sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.5)', borderRadius: 2 }}
+              <Button variant="outlined" fullWidth
+                sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)', borderRadius: 1.5, textTransform: 'none', fontWeight: 600, fontSize: 12, '&:hover': { bgcolor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.5)' } }}
                 href="/Docs/API-Style-Guide.md" target="_blank">
-                View Style Guide
+                View Style Guide →
               </Button>
             </Paper>
           </Grid>
@@ -249,85 +291,89 @@ export default function UploadPipeline() {
 
       {/* ── STEPS 2-4: LOADING ── */}
       {loading && (
-        <Paper sx={{ p: 5, borderRadius: 3, textAlign: 'center' }}>
-          <CircularProgress size={50} sx={{ color: '#1e3a5f', mb: 2 }} />
-          <Typography variant="h5" sx={{ fontWeight: 600, color: '#1e3a5f' }}>
-            {step === 2 && 'Running Structural Audit...'}
-            {step === 3 && 'AI Engine Analyzing...'}
-            {step === 4 && 'Governance Gate Evaluating...'}
+        <Paper variant="outlined" sx={{ p: 6, borderRadius: 2, textAlign: 'center', border: `1px solid ${C.border}` }}>
+          <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: C.navyLt, display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2.5 }}>
+            <CircularProgress size={32} sx={{ color: C.navy }} thickness={4} />
+          </Box>
+          <Typography sx={{ fontWeight: 700, fontSize: 16, color: C.navy, mb: 0.5 }}>
+            {step === 2 && 'Running Structural Audit'}
+            {step === 3 && 'AI Engine Analyzing'}
+            {step === 4 && 'Governance Gate Evaluating'}
           </Typography>
-          <Typography sx={{ color: '#64748b', mt: 1 }}>
-            {step === 2 && 'Checking against Microsoft REST Guidelines & BIAT standards'}
-            {step === 3 && 'Qwen 2.5 is reviewing your API for semantic issues'}
-            {step === 4 && 'Calculating final governance score...'}
+          <Typography sx={{ color: C.slate, fontSize: 13, mb: 3 }}>
+            {step === 2 && 'Checking against Microsoft REST Guidelines & BIAT security standards'}
+            {step === 3 && 'Qwen 2.5 is reviewing your specification for semantic issues'}
+            {step === 4 && 'Calculating final governance score and decision...'}
           </Typography>
-          <LinearProgress sx={{ mt: 3, borderRadius: 2, bgcolor: '#e2e8f0', '& .MuiLinearProgress-bar': { bgcolor: '#1e3a5f' } }} />
+          <LinearProgress sx={{ maxWidth: 320, mx: 'auto', borderRadius: 2, height: 4, bgcolor: C.navyLt, '& .MuiLinearProgress-bar': { bgcolor: C.navy } }} />
         </Paper>
       )}
 
       {/* ── STEP 5: RESULTS ── */}
       {result && step === 5 && (
         <Box>
-          {/* Audit Summary */}
+          {/* Top stat cards */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {[
+              { label: 'Structural Score', value: `${score}%`, color: score >= 80 ? C.green : C.red, bg: score >= 80 ? C.greenLt : C.redLt },
+              { label: 'Errors Found', value: errors.length, color: errors.length === 0 ? C.green : C.red, bg: errors.length === 0 ? C.greenLt : C.redLt },
+              { label: 'Warnings', value: warnings.length, color: C.amber, bg: C.amberLt },
+              { label: 'Gate Decision', value: passed ? 'PASS' : 'FAIL', color: passed ? C.green : C.red, bg: passed ? C.greenLt : C.redLt }
+            ].map(s => (
+              <Grid item xs={6} md={3} key={s.label}>
+                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, border: `1px solid ${C.border}`, textAlign: 'center' }}>
+                  <Typography sx={{ fontSize: 28, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</Typography>
+                  <Typography sx={{ fontSize: 11, color: C.slate, mt: 0.5, textTransform: 'uppercase', letterSpacing: 0.8 }}>{s.label}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* Governance Gate banner */}
+          <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, mb: 3, border: `1.5px solid ${passed ? C.green : C.red}`, bgcolor: passed ? C.greenLt : C.redLt }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              {passed ? <IconShieldCheck size={24} color={C.green} /> : <IconAlertCircle size={24} color={C.red} />}
+              <Box>
+                <Typography sx={{ fontWeight: 700, fontSize: 14, color: passed ? C.green : C.red }}>
+                  {passed ? 'Governance Gate — APPROVED' : 'Governance Gate — REJECTED'}
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: C.slate }}>
+                  {passed
+                    ? 'All checks passed. API is being auto-published to WSO2 Gateway.'
+                    : `Score ${score}% is below the 80% minimum threshold required for publication.`}
+                </Typography>
+              </Box>
+            </Box>
+          </Paper>
+
           <Grid container spacing={3} sx={{ mb: 3 }}>
             <Grid item xs={12} md={4}>
-              <Paper sx={{ p: 3, borderRadius: 3, textAlign: 'center' }}>
-                <ScoreGauge score={score} size={140} />
-                <Typography variant="h6" sx={{ mt: 1.5, fontWeight: 700, color: score >= 80 ? '#22c55e' : '#ef4444' }}>
-                  {score >= 80 ? 'Excellent Structural Integrity' : 'Needs Improvement'}
-                </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 1.5 }}>
+              <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, border: `1px solid ${C.border}`, height: '100%' }}>
+                <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy, mb: 1 }}>Structural Score</Typography>
+                <ScoreGauge score={score} />
+                <Divider sx={{ my: 2 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-around' }}>
                   <Box sx={{ textAlign: 'center' }}>
-                    <Typography sx={{ fontWeight: 700, color: '#ef4444', fontSize: 20 }}>{errors.length}</Typography>
-                    <Typography sx={{ fontSize: 11, color: '#64748b' }}>Errors</Typography>
+                    <Typography sx={{ fontWeight: 800, fontSize: 22, color: C.red }}>{errors.length}</Typography>
+                    <Typography sx={{ fontSize: 11, color: C.slate }}>Errors</Typography>
                   </Box>
                   <Box sx={{ textAlign: 'center' }}>
-                    <Typography sx={{ fontWeight: 700, color: '#f97316', fontSize: 20 }}>{warnings.length}</Typography>
-                    <Typography sx={{ fontSize: 11, color: '#64748b' }}>Warnings</Typography>
+                    <Typography sx={{ fontWeight: 800, fontSize: 22, color: C.amber }}>{warnings.length}</Typography>
+                    <Typography sx={{ fontSize: 11, color: C.slate }}>Warnings</Typography>
                   </Box>
                 </Box>
               </Paper>
             </Grid>
 
             <Grid item xs={12} md={8}>
-              {/* Governance Gate */}
-              <Paper sx={{ p: 3, borderRadius: 3, mb: 2, border: `2px solid ${passed ? '#22c55e' : '#ef4444'}` }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                  {passed
-                    ? <IconShieldCheck size={28} color="#22c55e" />
-                    : <IconX size={28} color="#ef4444" />}
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: passed ? '#22c55e' : '#ef4444' }}>
-                    {passed ? 'STATUS: PASS — Gate Cleared' : 'STATUS: FAIL — Governance Rejected'}
-                  </Typography>
-                </Box>
-                <Typography sx={{ color: '#64748b', fontSize: 13 }}>
-                  {passed
-                    ? 'This API has passed all mandatory governance checks. Auto-publishing to WSO2 Gateway...'
-                    : `Score ${score}% is below the 80% threshold required for auto-approval.`}
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2, mt: 2, flexWrap: 'wrap' }}>
-                  {[
-                    { label: 'Structural Score', value: `${score}%`, pass: score >= 80 },
-                    { label: 'AI Similarity', value: `${(aiSimilarity * 100).toFixed(1)}%`, pass: aiSimilarity < 0.85 },
-                    { label: 'Critical Errors', value: errors.length, pass: errors.length === 0 }
-                  ].map(item => (
-                    <Box key={item.label} sx={{ flex: 1, minWidth: 100, p: 1.5, bgcolor: item.pass ? '#f0fdf4' : '#fef2f2', borderRadius: 2 }}>
-                      <Typography sx={{ fontSize: 11, color: '#64748b' }}>{item.label}</Typography>
-                      <Typography sx={{ fontWeight: 700, color: item.pass ? '#22c55e' : '#ef4444' }}>{item.value}</Typography>
-                    </Box>
-                  ))}
-                </Box>
-              </Paper>
-
-              {/* AI Suggestions */}
               {aiSuggestions && (
-                <Paper sx={{ p: 3, borderRadius: 3 }}>
+                <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, border: `1px solid ${C.border}`, height: '100%' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                    <IconBrain size={20} color="#7c3aed" />
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>AI Engine Suggestions</Typography>
+                    <IconBrain size={18} color={C.navy} />
+                    <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy }}>AI Engine Recommendations</Typography>
                   </Box>
-                  <Typography sx={{ fontSize: 13, color: '#475569', whiteSpace: 'pre-wrap', maxHeight: 120, overflow: 'auto' }}>
-                    {aiSuggestions.slice(0, 400)}{aiSuggestions.length > 400 ? '...' : ''}
+                  <Typography sx={{ fontSize: 13, color: C.slate, whiteSpace: 'pre-wrap', lineHeight: 1.7, maxHeight: 200, overflow: 'auto' }}>
+                    {aiSuggestions.slice(0, 600)}{aiSuggestions.length > 600 ? '...' : ''}
                   </Typography>
                 </Paper>
               )}
@@ -336,95 +382,97 @@ export default function UploadPipeline() {
 
           {/* Violations Table */}
           {violations.length > 0 && (
-            <Paper sx={{ p: 3, borderRadius: 3, mb: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>Spectral Linter Findings</Typography>
-                <Chip label={`${violations.length} issues`} size="small" sx={{ bgcolor: '#fef2f2', color: '#ef4444' }} />
+            <Paper variant="outlined" sx={{ borderRadius: 2, mb: 3, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+              <Box sx={{ px: 3, py: 2, borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy }}>Linter Findings</Typography>
+                <Chip label={`${violations.length} issues`} size="small" sx={{ bgcolor: C.redLt, color: C.red, fontWeight: 700, fontSize: 11 }} />
               </Box>
               <TableContainer>
                 <Table size="small">
                   <TableHead>
-                    <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                    <TableRow sx={{ bgcolor: C.bg }}>
                       {['Severity', 'Rule', 'Message', 'Path'].map(h => (
-                        <TableCell key={h} sx={{ fontWeight: 700, fontSize: 12, color: '#374151' }}>{h}</TableCell>
+                        <TableCell key={h} sx={{ fontWeight: 700, fontSize: 11, color: C.slate, textTransform: 'uppercase', letterSpacing: 0.5, py: 1.5 }}>{h}</TableCell>
                       ))}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {violations.slice(0, 20).map((v, i) => (
-                      <TableRow key={i} hover>
-                        <TableCell>
-                          <Chip label={severityLabel(v.severity)} size="small"
-                            sx={{ bgcolor: severityColor(v.severity) + '20', color: severityColor(v.severity), fontSize: 10, fontWeight: 600 }} />
-                        </TableCell>
-                        <TableCell sx={{ fontSize: 12, fontFamily: 'monospace', color: '#374151' }}>{v.code || '-'}</TableCell>
-                        <TableCell sx={{ fontSize: 12, maxWidth: 300 }}>{v.message}</TableCell>
-                        <TableCell sx={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace' }}>
-                          {Array.isArray(v.path) ? v.path.join(' › ') : v.path || '-'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {violations.slice(0, 20).map((v, i) => {
+                      const sc = v.severity === 0 || v.severity === 'error' ? { c: C.red, bg: C.redLt, l: 'Error' } : v.severity === 1 || v.severity === 'warn' ? { c: C.amber, bg: C.amberLt, l: 'Warning' } : { c: C.navy, bg: C.navyLt, l: 'Info' };
+                      return (
+                        <TableRow key={i} hover sx={{ '&:hover': { bgcolor: C.bg } }}>
+                          <TableCell sx={{ py: 1.5 }}>
+                            <Chip label={sc.l} size="small" sx={{ bgcolor: sc.bg, color: sc.c, fontWeight: 700, fontSize: 10 }} />
+                          </TableCell>
+                          <TableCell sx={{ fontSize: 11, fontFamily: 'monospace', color: C.navy, fontWeight: 600 }}>{v.code || '-'}</TableCell>
+                          <TableCell sx={{ fontSize: 12, color: C.slate, maxWidth: 280 }}>{v.message}</TableCell>
+                          <TableCell sx={{ fontSize: 11, color: C.slate, fontFamily: 'monospace' }}>
+                            {Array.isArray(v.path) ? v.path.join(' › ') : v.path || '—'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
             </Paper>
           )}
 
-          {/* Refactored YAML */}
+          {/* AI Optimized YAML */}
           {refactoredYaml && (
-            <Paper sx={{ p: 3, borderRadius: 3, mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <IconBrain size={18} color="#7c3aed" />
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>AI Optimized Specification</Typography>
-                <Chip label="OPTIMIZED" size="small" sx={{ bgcolor: '#7c3aed', color: '#fff', fontSize: 10 }} />
+            <Paper variant="outlined" sx={{ borderRadius: 2, mb: 3, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+              <Box sx={{ px: 3, py: 2, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <IconBrain size={16} color={C.navy} />
+                <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy }}>AI Optimized Specification</Typography>
+                <Chip label="OPTIMIZED" size="small" sx={{ bgcolor: C.navyLt, color: C.navy, fontWeight: 700, fontSize: 10 }} />
               </Box>
-              <Box sx={{ bgcolor: '#0f172a', borderRadius: 2, p: 2, maxHeight: 280, overflow: 'auto' }}>
-                <pre style={{ margin: 0, color: '#e2e8f0', fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+              <Box sx={{ bgcolor: '#0f172a', p: 2.5, maxHeight: 280, overflow: 'auto' }}>
+                <pre style={{ margin: 0, color: '#94a3b8', fontSize: 12, fontFamily: '"Fira Code", monospace', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                   {refactoredYaml.slice(0, 2000)}{refactoredYaml.length > 2000 ? '\n...' : ''}
                 </pre>
               </Box>
             </Paper>
           )}
 
-          {/* WSO2 Deploy Terminal */}
+          {/* WSO2 Terminal */}
           {passed && (
-            <Paper sx={{ p: 3, borderRadius: 3, mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <IconRocket size={20} color="#1e3a5f" />
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>WSO2 Gateway Deployment</Typography>
+            <Paper variant="outlined" sx={{ borderRadius: 2, mb: 3, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+              <Box sx={{ px: 3, py: 2, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <IconRocket size={16} color={C.navy} />
+                <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy }}>WSO2 Gateway Deployment</Typography>
                 {result.final_status === 'PUBLISHED' && (
-                  <Chip label="PUBLISHED" size="small" sx={{ bgcolor: '#22c55e', color: '#fff', fontWeight: 700 }} />
+                  <Chip label="PUBLISHED" size="small" sx={{ bgcolor: C.greenLt, color: C.green, fontWeight: 700 }} />
                 )}
               </Box>
-              <Box sx={{ bgcolor: '#0f172a', borderRadius: 2, p: 2, minHeight: 120 }}>
+              <Box sx={{ bgcolor: '#0f172a', p: 2.5, minHeight: 130 }}>
                 {deployLog.map((log, i) => (
-                  <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                    <Typography sx={{ color: '#22c55e', fontSize: 12, mr: 0.5 }}>→</Typography>
-                    <Typography sx={{ color: log.success ? '#22c55e' : '#e2e8f0', fontSize: 12, fontFamily: 'monospace' }}>
-                      {log.text}
-                    </Typography>
+                  <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 0.5 }}>
+                    <Typography sx={{ color: C.green, fontSize: 12, fontFamily: 'monospace', flexShrink: 0 }}>$</Typography>
+                    <Typography sx={{ color: log.success ? C.green : '#94a3b8', fontSize: 12, fontFamily: 'monospace' }}>{log.text}</Typography>
                   </Box>
                 ))}
                 {deployLog.length === 0 && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CircularProgress size={14} sx={{ color: '#22c55e' }} />
-                    <Typography sx={{ color: '#94a3b8', fontSize: 12, fontFamily: 'monospace' }}>Initializing...</Typography>
+                    <CircularProgress size={12} sx={{ color: C.green }} />
+                    <Typography sx={{ color: '#475569', fontSize: 12, fontFamily: 'monospace' }}>Initializing connection...</Typography>
                   </Box>
                 )}
               </Box>
               {result.wso2_id && (
-                <Typography sx={{ fontSize: 12, color: '#64748b', mt: 1 }}>
-                  Deployment ID: {result.wso2_id}
-                </Typography>
+                <Box sx={{ px: 3, py: 1.5, borderTop: `1px solid ${C.border}` }}>
+                  <Typography sx={{ fontSize: 11, color: C.slate, fontFamily: 'monospace' }}>Deployment ID: {result.wso2_id}</Typography>
+                </Box>
               )}
             </Paper>
           )}
 
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button variant="outlined" onClick={reset} sx={{ borderColor: '#1e3a5f', color: '#1e3a5f', borderRadius: 2 }}>
-              Upload Another API
+            <Button variant="outlined" onClick={reset}
+              sx={{ borderColor: C.navy, color: C.navy, borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
+              ← New Submission
             </Button>
-            <Button variant="contained" href="/my-apis" sx={{ bgcolor: '#1e3a5f', borderRadius: 2 }}>
+            <Button variant="contained" href="/my-apis" component="a"
+              sx={{ bgcolor: C.navy, '&:hover': { bgcolor: C.navyDk }, borderRadius: 1.5, textTransform: 'none', fontWeight: 600, boxShadow: 'none' }}>
               View in My APIs
             </Button>
           </Box>

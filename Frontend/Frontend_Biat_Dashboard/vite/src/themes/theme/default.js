@@ -1,53 +1,53 @@
-// ==============================|| DEFAULT THEME COLORS ||============================== //
+// ==============================|| BIAT DESIGN SYSTEM COLORS ||============================== //
 
 const defaultColor = {
   // paper & background
   paper: '#ffffff',
 
-  // primary
-  primaryLight: '#e3f2fd',
-  primary200: '#90caf9',
-  primaryMain: '#2196f3',
-  primaryDark: '#1e88e5',
-  primary800: '#1565c0',
+  // primary — BIAT navy blue (buttons, links, highlights)
+  primaryLight: '#e8edf5',
+  primary200: '#8da5c9',
+  primaryMain: '#1e3a5f',
+  primaryDark: '#162d4a',
+  primary800: '#0f1f33',
 
-  // secondary
-  secondaryLight: '#ede7f6',
-  secondary200: '#b39ddb',
-  secondaryMain: '#673ab7',
-  secondaryDark: '#5e35b1',
-  secondary800: '#4527a0',
+  // secondary — same navy family (drives sidebar active states, avatars)
+  secondaryLight: '#eef2f8',
+  secondary200: '#a3b8d4',
+  secondaryMain: '#1e3a5f',
+  secondaryDark: '#162d4a',
+  secondary800: '#0f1f33',
 
   // success
-  successLight: '#b9f6ca',
-  success200: '#69f0ae',
-  successMain: '#00e676',
-  successDark: '#00c853',
+  successLight: '#dcfce7',
+  success200: '#86efac',
+  successMain: '#16a34a',
+  successDark: '#15803d',
 
   // error
-  errorLight: '#ef9a9a',
-  errorMain: '#f44336',
-  errorDark: '#c62828',
+  errorLight: '#fee2e2',
+  errorMain: '#dc2626',
+  errorDark: '#b91c1c',
 
   // orange
-  orangeLight: '#fbe9e7',
-  orangeMain: '#ffab91',
-  orangeDark: '#d84315',
+  orangeLight: '#fff7ed',
+  orangeMain: '#fb923c',
+  orangeDark: '#ea580c',
 
   // warning
-  warningLight: '#fff8e1',
-  warningMain: '#ffe57f',
-  warningDark: '#ffc107',
+  warningLight: '#fffbeb',
+  warningMain: '#fbbf24',
+  warningDark: '#d97706',
 
-  // grey
+  // grey — slate scale, clean and professional
   grey50: '#f8fafc',
-  grey100: '#eef2f6',
-  grey200: '#e3e8ef',
-  grey300: '#cdd5df',
-  grey500: '#697586',
-  grey600: '#4b5565',
-  grey700: '#364152',
-  grey900: '#121926',
+  grey100: '#f1f5f9',
+  grey200: '#e2e8f0',
+  grey300: '#cbd5e1',
+  grey500: '#64748b',
+  grey600: '#475569',
+  grey700: '#334155',
+  grey900: '#0f172a',
 
   // ==============================|| DARK THEME VARIANTS ||============================== //
 
