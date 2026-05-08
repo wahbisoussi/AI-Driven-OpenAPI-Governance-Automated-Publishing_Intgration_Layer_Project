@@ -76,7 +76,7 @@ export function buildPalette(presetColor) {
     divider: colors.grey200,
     background: {
       paper: colors.paper,
-      default: colors.paper
+      default: '#f1f5f9'
     }
   };
 

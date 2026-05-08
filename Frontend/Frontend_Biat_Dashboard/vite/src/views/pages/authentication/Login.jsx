@@ -19,8 +19,8 @@ export default function Login() {
     setLoading(true);
     await new Promise(r => setTimeout(r, 800));
     if (username === 'admin' && password === 'admin') {
-      localStorage.setItem('biat_auth', 'true');
-      navigate('/');
+      localStorage.setItem('biat_pending_verify', 'true');
+      navigate('/verify');
     } else {
       setError('Invalid credentials. Use admin / admin.');
     }
