@@ -37,7 +37,7 @@ export default function Header() {
   const handleClose = () => setAnchorEl(null);
 
   const handleLogout = () => {
-    localStorage.removeItem('biat_auth');
+    sessionStorage.removeItem('biat_auth');
     handleClose();
     navigate('/login');
   };

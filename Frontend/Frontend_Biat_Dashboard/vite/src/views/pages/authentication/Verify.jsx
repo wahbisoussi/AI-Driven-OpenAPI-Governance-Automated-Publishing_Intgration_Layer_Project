@@ -5,16 +5,19 @@ import { IconShieldCheck, IconLock } from '@tabler/icons-react';
 
 // ================================|| BIAT 2FA VERIFY ||================================ //
 
+const MAX_PIN_ATTEMPTS = 3;
+
 export default function Verify() {
   const navigate = useNavigate();
   const [digits, setDigits] = useState(['', '', '', '']);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
+  const [pinAttempts, setPinAttempts] = useState(0);
   const refs = [useRef(), useRef(), useRef(), useRef()];
 
   useEffect(() => {
-    if (!localStorage.getItem('biat_pending_verify')) {
+    if (!sessionStorage.getItem('biat_pending_verify')) {
       navigate('/login');
     }
     refs[0].current?.focus();
@@ -42,14 +45,22 @@ export default function Verify() {
     setLoading(true);
     await new Promise(r => setTimeout(r, 700));
     if (pin === '6767') {
-      localStorage.removeItem('biat_pending_verify');
-      localStorage.setItem('biat_auth', 'true');
-      navigate('/');
+      sessionStorage.removeItem('biat_pending_verify');
+      sessionStorage.setItem('biat_auth', 'true');
+      navigate('/dashboard');
     } else {
-      setError('Incorrect PIN. Please try again.');
-      setDigits(['', '', '', '']);
-      setShake(true);
-      setTimeout(() => { setShake(false); refs[0].current?.focus(); }, 600);
+      const next = pinAttempts + 1;
+      setPinAttempts(next);
+      if (next >= MAX_PIN_ATTEMPTS) {
+        sessionStorage.removeItem('biat_pending_verify');
+        navigate('/login');
+      } else {
+        const remaining = MAX_PIN_ATTEMPTS - next;
+        setError(`Incorrect PIN. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`);
+        setDigits(['', '', '', '']);
+        setShake(true);
+        setTimeout(() => { setShake(false); refs[0].current?.focus(); }, 600);
+      }
     }
     setLoading(false);
   };

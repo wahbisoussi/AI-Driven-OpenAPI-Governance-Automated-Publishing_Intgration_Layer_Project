@@ -1,8 +1,8 @@
 // assets
-import { IconDashboard, IconApi, IconSettings, IconShieldCheck } from '@tabler/icons-react';
+import { IconDashboard, IconApi, IconSettings, IconShieldCheck, IconChartBar } from '@tabler/icons-react';
 
 // constant
-const icons = { IconDashboard, IconApi, IconSettings, IconShieldCheck };
+const icons = { IconDashboard, IconApi, IconSettings, IconShieldCheck, IconChartBar };
 
 // ==============================|| BIAT MENU ITEMS ||============================== //
 
@@ -25,6 +25,14 @@ const dashboard = {
       type: 'item',
       url: '/my-apis',
       icon: icons.IconApi,
+      breadcrumbs: false
+    },
+    {
+      id: 'analytics',
+      title: 'Analytics',
+      type: 'item',
+      url: '/analytics',
+      icon: icons.IconChartBar,
       breadcrumbs: false
     }
   ]

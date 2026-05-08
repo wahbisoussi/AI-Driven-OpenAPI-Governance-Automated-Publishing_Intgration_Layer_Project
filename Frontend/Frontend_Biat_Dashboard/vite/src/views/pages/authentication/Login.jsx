@@ -5,24 +5,47 @@ import { IconShieldCheck } from '@tabler/icons-react';
 
 // ================================|| BIAT LOGIN ||================================ //
 
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 60_000;
+
 export default function Login() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [attempts, setAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState(null);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (lockedUntil && Date.now() < lockedUntil) {
+      const secs = Math.ceil((lockedUntil - Date.now()) / 1000);
+      setError(`Too many failed attempts. Try again in ${secs}s.`);
+      return;
+    }
+
     if (!username || !password) { setError('Please enter your credentials.'); return; }
     setLoading(true);
     await new Promise(r => setTimeout(r, 800));
+
     if (username === 'admin' && password === 'admin') {
-      localStorage.setItem('biat_pending_verify', 'true');
+      setAttempts(0);
+      setLockedUntil(null);
+      sessionStorage.setItem('biat_pending_verify', 'true');
       navigate('/verify');
     } else {
-      setError('Invalid credentials. Use admin / admin.');
+      const next = attempts + 1;
+      setAttempts(next);
+      if (next >= MAX_ATTEMPTS) {
+        setLockedUntil(Date.now() + LOCKOUT_MS);
+        setAttempts(0);
+        setError('Account temporarily locked after too many failed attempts.');
+      } else {
+        setError(`Invalid credentials. ${MAX_ATTEMPTS - next} attempt${MAX_ATTEMPTS - next !== 1 ? 's' : ''} remaining.`);
+      }
     }
     setLoading(false);
   };

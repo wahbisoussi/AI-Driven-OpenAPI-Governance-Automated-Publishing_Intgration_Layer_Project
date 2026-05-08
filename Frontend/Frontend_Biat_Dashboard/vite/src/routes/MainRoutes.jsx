@@ -9,6 +9,8 @@ import ProtectedRoute from './ProtectedRoute';
 // BIAT page routing
 const UploadPipeline = Loadable(lazy(() => import('views/upload/UploadPipeline')));
 const MyAPIs = Loadable(lazy(() => import('views/my-apis/MyAPIs')));
+const ApiDetail = Loadable(lazy(() => import('views/my-apis/ApiDetail')));
+const Analytics = Loadable(lazy(() => import('views/analytics/Analytics')));
 const Settings = Loadable(lazy(() => import('views/settings/Settings')));
 
 // ==============================|| MAIN ROUTING ||============================== //
@@ -28,6 +30,14 @@ const MainRoutes = {
     {
       path: '/my-apis',
       element: <MyAPIs />
+    },
+    {
+      path: '/my-apis/:id',
+      element: <ApiDetail />
+    },
+    {
+      path: '/analytics',
+      element: <Analytics />
     },
     {
       path: '/settings',

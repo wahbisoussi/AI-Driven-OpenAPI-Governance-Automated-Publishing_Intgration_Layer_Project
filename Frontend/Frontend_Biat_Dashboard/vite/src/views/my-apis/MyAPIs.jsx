@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Paper, Chip, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, IconButton, CircularProgress,
-  Alert, Button, TextField, InputAdornment, Grid
+  Alert, Button, TextField, InputAdornment, Grid, Skeleton, Dialog,
+  DialogTitle, DialogContent, DialogContentText, DialogActions
 } from '@mui/material';
-import { IconTrash, IconSearch, IconRefresh, IconApi, IconCircleCheck, IconCircleX, IconClock } from '@tabler/icons-react';
+import { IconTrash, IconSearch, IconRefresh, IconApi, IconCircleCheck, IconCircleX, IconClock, IconChevronRight } from '@tabler/icons-react';
 import axios from 'axios';
+import { useToast } from 'contexts/ToastContext';
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -25,11 +28,14 @@ const statusMap = (s) => {
 };
 
 export default function MyAPIs() {
+  const navigate = useNavigate();
+  const showToast = useToast();
   const [specs, setSpecs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [deleting, setDeleting] = useState(null);
+  const [confirmId, setConfirmId] = useState(null);
 
   const fetchSpecs = async () => {
     setLoading(true); setError(null);
@@ -42,14 +48,19 @@ export default function MyAPIs() {
 
   useEffect(() => { fetchSpecs(); }, []);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this specification?')) return;
+  const handleDelete = async () => {
+    const id = confirmId;
+    setConfirmId(null);
     setDeleting(id);
     try {
       await axios.delete(`${API_BASE}/specs/${id}`);
       setSpecs(prev => prev.filter(s => s.id !== id));
-    } catch { alert('Failed to delete.'); }
-    finally { setDeleting(null); }
+      showToast('Specification deleted successfully.', 'success');
+    } catch {
+      showToast('Failed to delete specification.', 'error');
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const filtered = specs.filter(s =>
@@ -120,9 +131,18 @@ export default function MyAPIs() {
         </Box>
 
         {loading ? (
-          <Box sx={{ p: 6, textAlign: 'center' }}>
-            <CircularProgress size={32} sx={{ color: C.navy }} thickness={3} />
-            <Typography sx={{ color: C.slate, mt: 1.5, fontSize: 13 }}>Loading specifications...</Typography>
+          <Box sx={{ p: 3 }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, borderBottom: `1px solid ${C.border}` }}>
+                <Skeleton width={32} height={20} />
+                <Skeleton width={160} height={20} sx={{ flex: 1 }} />
+                <Skeleton width={60} height={24} />
+                <Skeleton width={90} height={24} />
+                <Skeleton width={80} height={20} />
+                <Skeleton width={80} height={20} />
+                <Skeleton variant="circular" width={28} height={28} />
+              </Box>
+            ))}
           </Box>
         ) : filtered.length === 0 ? (
           <Box sx={{ p: 6, textAlign: 'center' }}>
@@ -156,7 +176,10 @@ export default function MyAPIs() {
                 {filtered.map(spec => {
                   const sc = statusMap(spec.workflow_status);
                   return (
-                    <TableRow key={spec.id} sx={{ '&:hover': { bgcolor: C.bg }, transition: 'background 0.15s' }}>
+                    <TableRow
+                      key={spec.id}
+                      onClick={() => navigate(`/my-apis/${spec.id}`)}
+                      sx={{ cursor: 'pointer', '&:hover': { bgcolor: C.navyLt }, transition: 'background 0.15s' }}>
                       <TableCell sx={{ fontSize: 12, color: C.slate, fontFamily: 'monospace', width: 48 }}>
                         {spec.id}
                       </TableCell>
@@ -181,11 +204,16 @@ export default function MyAPIs() {
                       <TableCell sx={{ fontSize: 12, color: C.slate, whiteSpace: 'nowrap' }}>
                         {spec.created_at ? new Date(spec.created_at).toLocaleDateString('en-GB') : '—'}
                       </TableCell>
-                      <TableCell sx={{ width: 48 }}>
-                        <IconButton size="small" onClick={() => handleDelete(spec.id)} disabled={deleting === spec.id}
-                          sx={{ color: C.slate, '&:hover': { color: C.red, bgcolor: C.redLt }, borderRadius: 1 }}>
-                          {deleting === spec.id ? <CircularProgress size={14} /> : <IconTrash size={15} />}
-                        </IconButton>
+                      <TableCell sx={{ width: 72 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <IconButton size="small"
+                            onClick={e => { e.stopPropagation(); setConfirmId(spec.id); }}
+                            disabled={deleting === spec.id}
+                            sx={{ color: C.slate, '&:hover': { color: C.red, bgcolor: C.redLt }, borderRadius: 1 }}>
+                            {deleting === spec.id ? <CircularProgress size={14} /> : <IconTrash size={15} />}
+                          </IconButton>
+                          <IconChevronRight size={14} color={C.slate} />
+                        </Box>
                       </TableCell>
                     </TableRow>
                   );
@@ -204,6 +232,25 @@ export default function MyAPIs() {
           </Box>
         )}
       </Paper>
+
+      <Dialog open={!!confirmId} onClose={() => setConfirmId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: '#1e3a5f' }}>Delete Specification</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: 13 }}>
+            This will permanently remove the specification and all associated reports. This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setConfirmId(null)} variant="outlined"
+            sx={{ borderColor: C.border, color: C.slate, textTransform: 'none', fontWeight: 600, borderRadius: 1.5, '&:hover': { borderColor: C.navy, color: C.navy } }}>
+            Cancel
+          </Button>
+          <Button onClick={handleDelete} variant="contained"
+            sx={{ bgcolor: C.red, textTransform: 'none', fontWeight: 600, borderRadius: 1.5, boxShadow: 'none', '&:hover': { bgcolor: '#b91c1c' } }}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

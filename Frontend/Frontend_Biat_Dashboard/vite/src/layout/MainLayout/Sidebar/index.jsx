@@ -26,7 +26,7 @@ function Sidebar() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    localStorage.removeItem('biat_auth');
+    sessionStorage.removeItem('biat_auth');
     navigate('/login');
   };
 
