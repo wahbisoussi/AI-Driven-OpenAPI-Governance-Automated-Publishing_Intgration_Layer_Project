@@ -39,6 +39,15 @@ services:
       ollama:
         condition: service_started
 
+  frontend:
+    build: ./Frontend/Frontend_Biat_Dashboard/vite
+    container_name: api_governance_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   ollama_data:
   db_data:
