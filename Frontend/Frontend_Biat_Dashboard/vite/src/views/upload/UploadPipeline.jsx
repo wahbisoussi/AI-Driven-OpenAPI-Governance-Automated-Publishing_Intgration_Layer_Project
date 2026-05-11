@@ -8,7 +8,7 @@ import {
   IconCloudUpload, IconCheck, IconX,
   IconBrain, IconShieldCheck, IconRocket, IconFileUpload, IconAlertCircle
 } from '@tabler/icons-react';
-import axios from 'axios';
+import api from 'services/api';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -27,7 +27,6 @@ const C = {
   card:    '#ffffff',
 };
 
-const API_BASE = 'http://localhost:8000/api/v1';
 
 const STEPS = [
   { id: 1, label: 'Import' },
@@ -162,7 +161,7 @@ export default function UploadPipeline() {
       await new Promise(r => setTimeout(r, 1000));
       setStep(4);
 
-      const res = await axios.post(`${API_BASE}/specs/upload`, formData, {
+      const res = await api.post('/specs/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 

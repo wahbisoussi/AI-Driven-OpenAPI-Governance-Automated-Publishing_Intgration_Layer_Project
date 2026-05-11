@@ -37,10 +37,18 @@ export default function Header() {
   const handleClose = () => setAnchorEl(null);
 
   const handleLogout = () => {
-    sessionStorage.removeItem('biat_auth');
+    sessionStorage.clear();
     handleClose();
     navigate('/login');
   };
+
+  const currentUser = (() => {
+    try { return JSON.parse(sessionStorage.getItem('biat_user') || '{}'); }
+    catch { return {}; }
+  })();
+  const displayName = currentUser.username || 'Admin';
+  const displayEmail = currentUser.email || 'admin@biat.com.tn';
+  const avatarLetter = displayName.charAt(0).toUpperCase();
 
   const handleSettings = () => {
     handleClose();
@@ -88,10 +96,10 @@ export default function Header() {
             transition: 'all 0.2s'
           }}
         >
-          <Avatar sx={{ width: 30, height: 30, bgcolor: '#1e3a5f', fontSize: 12, fontWeight: 700 }}>A</Avatar>
+          <Avatar sx={{ width: 30, height: 30, bgcolor: '#1e3a5f', fontSize: 12, fontWeight: 700 }}>{avatarLetter}</Avatar>
           <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1e293b', lineHeight: 1.2 }}>Admin</Typography>
-            <Typography sx={{ fontSize: 11, color: '#64748b', lineHeight: 1 }}>Administrator</Typography>
+            <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1e293b', lineHeight: 1.2 }}>{displayName}</Typography>
+            <Typography sx={{ fontSize: 11, color: '#64748b', lineHeight: 1 }}>{currentUser.role || 'ADMIN'}</Typography>
           </Box>
         </Box>
 
@@ -109,8 +117,8 @@ export default function Header() {
           }}
         >
           <Box sx={{ px: 2, py: 1.5 }}>
-            <Typography sx={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>Admin User</Typography>
-            <Typography sx={{ fontSize: 12, color: '#64748b' }}>admin@biat.com.tn</Typography>
+            <Typography sx={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{displayName}</Typography>
+            <Typography sx={{ fontSize: 12, color: '#64748b' }}>{displayEmail}</Typography>
           </Box>
           <Divider />
           <MenuItem onClick={handleSettings} sx={{ py: 1.2, gap: 1 }}>

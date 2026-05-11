@@ -2,9 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Paper, Grid, Alert, Button, LinearProgress, Skeleton } from '@mui/material';
 import { IconChartBar, IconRefresh, IconUpload, IconCircleCheck, IconCircleX, IconClock, IconApi } from '@tabler/icons-react';
-import axios from 'axios';
-
-const API_BASE = 'http://localhost:8000/api/v1';
+import api from 'services/api';
 
 const C = {
   navy: '#1e3a5f', navyLt: '#eef2f8', navyDk: '#162d4a',
@@ -63,7 +61,7 @@ export default function Analytics() {
   const fetchStats = async () => {
     setLoading(true); setError(null);
     try {
-      const res = await axios.get(`${API_BASE}/specs/dashboard/stats`);
+      const res = await api.get('/specs/dashboard/stats');
       setStats(res.data);
     } catch {
       setError('Failed to load analytics. Ensure the backend is running.');

@@ -12,6 +12,7 @@ const MyAPIs = Loadable(lazy(() => import('views/my-apis/MyAPIs')));
 const ApiDetail = Loadable(lazy(() => import('views/my-apis/ApiDetail')));
 const Analytics = Loadable(lazy(() => import('views/analytics/Analytics')));
 const Settings = Loadable(lazy(() => import('views/settings/Settings')));
+const NotFound = Loadable(lazy(() => import('views/errors/NotFound')));
 
 // ==============================|| MAIN ROUTING ||============================== //
 
@@ -42,6 +43,10 @@ const MainRoutes = {
     {
       path: '/settings',
       element: <Settings />
+    },
+    {
+      path: '*',
+      element: <NotFound />
     }
   ]
 };

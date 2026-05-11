@@ -121,13 +121,18 @@ Each specification moves through tracked states. **PUBLISHED** status is only re
 
 ## Frontend Dashboard
 
-> 🚧 **In Progress** — React dashboard is currently under development.
+> ✅ **Completed** — React dashboard fully integrated with the backend via OAuth2 + JWT authentication.
 
-Planned features:
-- **Governance Scorecards** — Visual structural and semantic compliance scores per spec
-- **AI Fix Panel** — Live suggestions from Qwen 2.5 to resolve validation failures without resubmission
-- **Spec Management** — Browse and manage all specifications stored in PGVector
-- **WSO2 Sync Status** — Real-time publication status directly from the WSO2 Publisher
+Delivered features:
+- **Upload Pipeline** — Drag-and-drop YAML upload with live step-by-step governance feedback
+- **Governance Scorecards** — Per-spec structural score (0–100), error/warning counts, full Spectral violations table with severity badges
+- **AI Fix Panel** — Qwen 2.5 semantic analysis results and AI-suggested fixes surfaced per specification
+- **Spec Management** — Browse, search, filter, and delete all specifications with status badges
+- **WSO2 Sync Status** — Real-time publication status (WSO2 external ID) per spec
+- **Analytics Dashboard** — Platform-wide KPIs: total APIs, published/rejected counts, average health score
+- **Authentication** — OAuth2 Password Flow + JWT (8h expiry), bcrypt-hashed passwords, brute-force lockout, JWT expiry guard on protected routes
+- **Settings** — Live user profile display, in-app password change wired to backend
+- **Dockerized** — Multi-stage nginx build, served on port 3000, orchestrated with Docker Compose
 
 ---
 

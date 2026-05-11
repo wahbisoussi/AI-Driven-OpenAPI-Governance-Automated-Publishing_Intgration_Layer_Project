@@ -7,10 +7,8 @@ import {
   DialogTitle, DialogContent, DialogContentText, DialogActions
 } from '@mui/material';
 import { IconTrash, IconSearch, IconRefresh, IconApi, IconCircleCheck, IconCircleX, IconClock, IconChevronRight } from '@tabler/icons-react';
-import axios from 'axios';
+import api from 'services/api';
 import { useToast } from 'contexts/ToastContext';
-
-const API_BASE = 'http://localhost:8000/api/v1';
 
 const C = {
   navy: '#1e3a5f', navyLt: '#eef2f8', navyDk: '#162d4a',
@@ -40,7 +38,7 @@ export default function MyAPIs() {
   const fetchSpecs = async () => {
     setLoading(true); setError(null);
     try {
-      const res = await axios.get(`${API_BASE}/specs/all_specs`);
+      const res = await api.get('/specs/all_specs');
       setSpecs(res.data);
     } catch { setError('Failed to load API specifications. Ensure the backend is running.'); }
     finally { setLoading(false); }
@@ -53,7 +51,7 @@ export default function MyAPIs() {
     setConfirmId(null);
     setDeleting(id);
     try {
-      await axios.delete(`${API_BASE}/specs/${id}`);
+      await api.delete(`/specs/${id}`);
       setSpecs(prev => prev.filter(s => s.id !== id));
       showToast('Specification deleted successfully.', 'success');
     } catch {

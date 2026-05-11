@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, TextField, Button, Paper, Alert, CircularProgress } from '@mui/material';
 import { IconShieldCheck } from '@tabler/icons-react';
+import axios from 'axios';
 
 // ================================|| BIAT LOGIN ||================================ //
 
@@ -29,14 +30,26 @@ export default function Login() {
 
     if (!username || !password) { setError('Please enter your credentials.'); return; }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
 
-    if (username === 'admin' && password === 'admin') {
+    try {
+      const form = new URLSearchParams();
+      form.append('username', username);
+      form.append('password', password);
+
+      const res = await axios.post(
+        'http://localhost:8000/api/v1/auth/token',
+        form,
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+
+      const { access_token, user } = res.data;
+      sessionStorage.setItem('biat_token', access_token);
+      sessionStorage.setItem('biat_user', JSON.stringify(user));
+      sessionStorage.setItem('biat_auth', 'true');
       setAttempts(0);
       setLockedUntil(null);
-      sessionStorage.setItem('biat_pending_verify', 'true');
-      navigate('/verify');
-    } else {
+      navigate('/dashboard');
+    } catch (err) {
       const next = attempts + 1;
       setAttempts(next);
       if (next >= MAX_ATTEMPTS) {
@@ -46,8 +59,9 @@ export default function Login() {
       } else {
         setError(`Invalid credentials. ${MAX_ATTEMPTS - next} attempt${MAX_ATTEMPTS - next !== 1 ? 's' : ''} remaining.`);
       }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

@@ -10,16 +10,19 @@ from app.db.session import get_db
 from app.services.governance_service import run_governance_pipeline
 from app.models.specification import APISpecification
 from app.models.governance_report import GovernanceReport
+from app.models.audit_results import StructuralReport, ViolationDetail
 from app.models.schemas import WorkflowStatus, APISpecificationRead
-from app.ai.llm_engine import LLMEngine 
+from app.models.user import User
+from app.ai.llm_engine import LLMEngine
 from app.services.publisher_service import import_api_from_yaml, publish_api_full_lifecycle
+from app.core.deps import get_current_user
 
 router = APIRouter()
 llm_engine = LLMEngine() 
 
 # --- 1. UPLOAD & AUTOMATED GOVERNANCE PIPELINE ---
 @router.post("/upload")
-async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     temp_path = f"temp_{file.filename}"
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -30,11 +33,11 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
             
         # 🟢 STEP 1: Run Governance Pipeline
         pipeline_result = run_governance_pipeline(
-            db=db, 
-            title=file.filename, 
-            version="1.0.0", 
-            content=content, 
-            user_id=1
+            db=db,
+            title=file.filename,
+            version="1.0.0",
+            content=content,
+            user_id=current_user.id
         )
 
         spec_id = pipeline_result.get("spec_id")
@@ -100,14 +103,51 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
 
 # --- 2. RETRIEVE SPECS ---
 @router.get("/all_specs", response_model=List[APISpecificationRead])
-def get_all_specs(db: Session = Depends(get_db)):
+def get_all_specs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     specs = db.query(APISpecification).options(
         joinedload(APISpecification.semantic_analysis)
     ).all()
     return specs if specs else []
 
+@router.get("/{spec_id}/report")
+def get_spec_report(spec_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    structural = db.query(StructuralReport).filter(
+        StructuralReport.api_spec_id == spec_id
+    ).options(joinedload(StructuralReport.violations)).first()
+
+    governance = db.query(GovernanceReport).filter(
+        GovernanceReport.api_spec_id == spec_id
+    ).first()
+
+    return {
+        "structural": {
+            "score": structural.score,
+            "isPassed": structural.isPassed,
+            "total_errors": structural.total_errors,
+            "total_warnings": structural.total_warnings,
+            "violations": [
+                {
+                    "id": v.id,
+                    "rule_name": v.rule_name,
+                    "severity": v.severity.value,
+                    "message": v.message,
+                    "line_number": v.line_number,
+                }
+                for v in structural.violations
+            ],
+        } if structural else None,
+        "governance": {
+            "final_decision": governance.final_decision,
+            "reason": governance.reason,
+            "structural_score": governance.structural_score,
+            "ai_similarity_score": governance.ai_similarity_score,
+            "timestamp": governance.timestamp.isoformat() if governance.timestamp else None,
+        } if governance else None,
+    }
+
+
 @router.get("/{spec_id}")
-def get_spec_by_id(spec_id: int, db: Session = Depends(get_db)):
+def get_spec_by_id(spec_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
     if not spec:
         raise HTTPException(status_code=404, detail="API Specification not found.")
@@ -135,7 +175,7 @@ def get_spec_by_id(spec_id: int, db: Session = Depends(get_db)):
 
 # --- 3. DASHBOARD STATS ---
 @router.get("/dashboard/stats")
-def get_governance_stats(db: Session = Depends(get_db)):
+def get_governance_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     total = db.query(APISpecification).count()
     published = db.query(APISpecification).filter(APISpecification.workflow_status == WorkflowStatus.PUBLISHED).count()
     rejected = db.query(APISpecification).filter(APISpecification.workflow_status == WorkflowStatus.REJECTED).count()
@@ -151,7 +191,7 @@ def get_governance_stats(db: Session = Depends(get_db)):
 
 # --- 4. DELETE BY ID ---
 @router.delete("/{spec_id}")
-def delete_spec_by_id(spec_id: int, db: Session = Depends(get_db)):
+def delete_spec_by_id(spec_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
     if not spec:
         raise HTTPException(status_code=404, detail="API Specification not found.")
@@ -169,7 +209,7 @@ def delete_spec_by_id(spec_id: int, db: Session = Depends(get_db)):
 
 # --- 5. SYSTEM CLEANUP ---
 @router.delete("/all/clear-database")
-def delete_all_specs(db: Session = Depends(get_db)):
+def delete_all_specs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         db.execute(text("DELETE FROM violation_details"))
         db.execute(text("DELETE FROM structural_reports"))
