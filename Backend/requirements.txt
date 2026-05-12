@@ -9,3 +9,4 @@ requests==2.31.0
 python-dotenv
 python-multipart
 python-jose[cryptography]==3.3.0
+bcrypt
