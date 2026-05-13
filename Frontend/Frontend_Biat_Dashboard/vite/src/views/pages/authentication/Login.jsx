@@ -37,7 +37,7 @@ export default function Login() {
       form.append('password', password);
 
       const res = await axios.post(
-        'http://localhost:8000/api/v1/auth/token',
+        '/api/v1/auth/token',
         form,
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       );

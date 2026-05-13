@@ -199,7 +199,7 @@ def delete_spec_by_id(spec_id: int, db: Session = Depends(get_db), current_user:
         db.execute(text(f"DELETE FROM violation_details WHERE report_id IN (SELECT id FROM structural_reports WHERE api_spec_id = {spec_id})"))
         db.execute(text(f"DELETE FROM structural_reports WHERE api_spec_id = {spec_id}"))
         db.execute(text(f"DELETE FROM governance_reports WHERE api_spec_id = {spec_id}"))
-        db.execute(text(f"DELETE FROM semantic_analysis WHERE api_spec_id = {spec_id}"))
+        db.execute(text(f"DELETE FROM semantic_analysis WHERE specification_id = {spec_id}"))
         db.delete(spec)
         db.commit()
         return {"detail": f"Spec {spec_id} deleted successfully.", "status": "SUCCESS"}
@@ -214,7 +214,7 @@ def delete_all_specs(db: Session = Depends(get_db), current_user: User = Depends
         db.execute(text("DELETE FROM violation_details"))
         db.execute(text("DELETE FROM structural_reports"))
         db.execute(text("DELETE FROM governance_reports"))
-        db.execute(text("DELETE FROM semantic_analysis"))
+        db.execute(text("DELETE FROM semantic_analysis"))  
         db.query(APISpecification).delete()
         db.commit()
         return {"detail": "System Purged.", "status": "SUCCESS"}

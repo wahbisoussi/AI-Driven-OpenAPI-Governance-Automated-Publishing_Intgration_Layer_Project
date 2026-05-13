@@ -49,10 +49,10 @@ async def lifespan(app: FastAPI):
             db.add(new_user)
             db.commit()
             print("🚀 System User created with secure credentials.")
-        elif admin_user.password_hash == "system_managed_hash":
+        elif not admin_user.password_hash.startswith("$2"):
             admin_user.password_hash = hash_password("biat6767")
             db.commit()
-            print("🔐 System User password upgraded to bcrypt hash.")
+            print("🔐 System User password reset to valid bcrypt hash.")
     except Exception as e:
         print(f"⚠️ Startup User Error: {e}")
     finally:
@@ -69,7 +69,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
