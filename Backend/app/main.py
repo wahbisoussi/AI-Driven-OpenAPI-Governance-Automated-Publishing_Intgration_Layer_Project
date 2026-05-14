@@ -16,6 +16,7 @@ from app.models.ai_analysis import SemanticAnalysis
 from app.api.v1.endpoints import specs
 from app.api.v1.endpoints import auth
 from app.core.security import hash_password
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # --- 3. Lifespan Handler ---
 @asynccontextmanager
@@ -82,6 +83,8 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(specs.router, prefix="/api/v1/specs", tags=["Specifications"])
+
+Instrumentator().instrument(app).expose(app)
 
 @app.get("/")
 def read_root():

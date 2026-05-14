@@ -10,3 +10,4 @@ python-dotenv
 python-multipart
 python-jose[cryptography]==3.3.0
 bcrypt
+prometheus-fastapi-instrumentator==7.1.0

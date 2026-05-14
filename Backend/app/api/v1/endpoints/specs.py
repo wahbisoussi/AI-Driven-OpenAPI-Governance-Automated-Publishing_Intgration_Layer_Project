@@ -1,5 +1,6 @@
 import shutil
 import os
+import difflib
 from typing import List
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
@@ -46,6 +47,24 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
         if not spec:
             raise HTTPException(status_code=404, detail="Failed to retrieve specification.")
 
+        # 🔄 VERSION DIFF: detect if a previous version of the same file exists
+        version_diff = None
+        previous_version_id = None
+        previous_spec = db.query(APISpecification).filter(
+            APISpecification.title == file.filename,
+            APISpecification.id != spec_id
+        ).order_by(APISpecification.created_at.desc()).first()
+        if previous_spec:
+            diff_lines = list(difflib.unified_diff(
+                previous_spec.raw_content.splitlines(keepends=True),
+                content.splitlines(keepends=True),
+                fromfile=f"v{previous_spec.id}",
+                tofile=f"v{spec_id}",
+                lineterm=''
+            ))
+            version_diff = ''.join(diff_lines) if diff_lines else None
+            previous_version_id = previous_spec.id
+
         # 🪄 STEP 2: MANDATORY AI REFACTORING
         ai_suggestions = pipeline_result.get("ai_analysis", {}).get("suggestions")
         
@@ -90,7 +109,9 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
             "status": "SUCCESS" if spec.workflow_status == WorkflowStatus.PUBLISHED else "PARTIAL_SUCCESS",
             "spec_id": spec.id,
             "final_status": spec.workflow_status.value,
-            "wso2_id": spec.external_id
+            "wso2_id": spec.external_id,
+            "version_diff": version_diff,
+            "previous_version_id": previous_version_id,
         }
 
     except Exception as e:

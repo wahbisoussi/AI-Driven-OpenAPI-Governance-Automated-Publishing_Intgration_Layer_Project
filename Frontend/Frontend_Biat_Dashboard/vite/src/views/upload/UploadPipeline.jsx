@@ -6,7 +6,8 @@ import {
 } from '@mui/material';
 import {
   IconCloudUpload, IconCheck,
-  IconShieldCheck, IconRocket, IconFileUpload, IconAlertCircle, IconCopy
+  IconShieldCheck, IconRocket, IconFileUpload, IconAlertCircle, IconCopy,
+  IconDownload, IconGitCompare
 } from '@tabler/icons-react';
 import api from 'services/api';
 
@@ -203,6 +204,61 @@ export default function UploadPipeline() {
   const isPipelineDone = !!result && step === 5;
 
   const copyFixed = () => { navigator.clipboard.writeText(fixedYaml); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+
+  const exportCSV = () => {
+    const title = specData?.title || file?.name || 'spec';
+    const date = specData?.created_at ? new Date(specData.created_at).toLocaleDateString() : new Date().toLocaleDateString();
+    const rows = [
+      ['BIAT API Governance Report'],
+      ['Specification', title], ['Date', date],
+      ['Structural Score', `${score}%`], ['Errors', errors.length], ['Warnings', warnings.length],
+      ['Gate Decision', governance?.final_decision || (passed ? 'APPROVED' : 'REJECTED')],
+      ['AI Similarity', governance ? `${(governance.ai_similarity_score * 100).toFixed(0)}%` : 'N/A'],
+      ['WSO2 Status', result?.final_status || 'N/A'], [''],
+      ['Violations'], ['Severity', 'Rule', 'Message', 'Line'],
+      ...violations.map(v => [v.severity, v.rule_name || '', v.message || '', v.line_number ?? '']),
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: `governance-report-${title.replace(/\s+/g, '-')}.csv` });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
+  const exportPDF = () => {
+    const title = specData?.title || file?.name || 'API Governance Report';
+    const date = specData?.created_at ? new Date(specData.created_at).toLocaleString() : new Date().toLocaleString();
+    const sc = score >= 80 ? '#16a34a' : score >= 50 ? '#d97706' : '#dc2626';
+    const dc = passed ? '#16a34a' : '#dc2626';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>BIAT Governance Report - ${title}</title>
+<style>body{font-family:'Segoe UI',Arial,sans-serif;padding:40px;color:#1e3a5f;max-width:900px;margin:0 auto}
+h1{color:#1e3a5f;border-bottom:3px solid #1e3a5f;padding-bottom:12px;font-size:22px}
+.sub{color:#64748b;font-size:12px;margin-bottom:24px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.card{border:1px solid #e2e8f0;border-radius:8px;padding:16px;text-align:center}
+.val{font-size:26px;font-weight:800;line-height:1;margin-bottom:4px}.lbl{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.8px}
+.sec{font-weight:700;font-size:13px;color:#1e3a5f;margin:20px 0 10px;border-left:4px solid #1e3a5f;padding-left:10px}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px}
+th{background:#f8fafc;font-weight:700;color:#64748b;text-transform:uppercase;font-size:10px;padding:10px 12px;text-align:left;border-bottom:2px solid #e2e8f0}
+td{padding:9px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700}
+.err{background:#fee2e2;color:#dc2626}.warn{background:#fffbeb;color:#d97706}
+.box{border:1px solid #e2e8f0;border-radius:8px;padding:14px;font-size:12px;color:#64748b;background:#f8fafc}
+@media print{body{padding:20px}}</style></head>
+<body>
+<h1>BIAT API Governance Report</h1>
+<div class="sub">${title} &nbsp;&middot;&nbsp; Generated ${date}</div>
+<div class="grid">
+  <div class="card"><div class="val" style="color:${sc}">${score}%</div><div class="lbl">Structural Score</div></div>
+  <div class="card"><div class="val" style="color:${errors.length > 0 ? '#dc2626' : '#16a34a'}">${errors.length}</div><div class="lbl">Errors</div></div>
+  <div class="card"><div class="val" style="color:#d97706">${warnings.length}</div><div class="lbl">Warnings</div></div>
+  <div class="card"><div class="val" style="color:${dc}">${passed ? 'PASS' : 'FAIL'}</div><div class="lbl">Gate Decision</div></div>
+</div>
+<div class="sec">Governance Decision</div>
+<div class="box"><strong style="color:${dc}">${governance?.final_decision || (passed ? 'APPROVED' : 'REJECTED')}</strong> &mdash; ${governance?.reason || (passed ? 'All checks passed. API published to WSO2 Gateway.' : `Score ${score}% is below the 80% threshold.`)}</div>
+${violations.length > 0 ? `<div class="sec">Linter Violations (${violations.length})</div><table><thead><tr><th>Severity</th><th>Rule</th><th>Message</th><th>Line</th></tr></thead><tbody>${violations.map(v => `<tr><td><span class="badge ${v.severity === 'ERROR' ? 'err' : 'warn'}">${v.severity}</span></td><td style="font-family:monospace;font-size:11px">${v.rule_name || '-'}</td><td>${v.message || '-'}</td><td style="font-family:monospace">${v.line_number ?? '-'}</td></tr>`).join('')}</tbody></table>` : '<div class="sec">Linter Violations</div><p style="color:#16a34a;font-size:13px">✓ No violations found</p>'}
+${result?.wso2_id ? `<div class="sec">WSO2 Deployment</div><div class="box">Deployment ID: <code>${result.wso2_id}</code> &middot; Status: <span style="color:#16a34a;font-weight:700">PUBLISHED</span></div>` : ''}
+<script>window.onload=()=>window.print();<\/script></body></html>`;
+    const w = window.open('', '_blank', 'width=900,height=700');
+    w.document.write(html); w.document.close();
+  };
 
   return (
     <Box>
@@ -489,6 +545,33 @@ export default function UploadPipeline() {
                   </Box>
                 </Box>
               </Paper>
+
+              {/* ── VERSION DIFF ── */}
+              {result?.version_diff && (
+                <Paper variant="outlined" sx={{ borderRadius: 2, mb: 3, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+                  <Box sx={{ px: 3, py: 2, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: C.bg }}>
+                    <IconGitCompare size={16} color={C.navy} />
+                    <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy }}>Version Diff</Typography>
+                    <Chip label={`vs v${result.previous_version_id}`} size="small" sx={{ bgcolor: C.navyLt, color: C.navy, fontWeight: 600, fontSize: 10, height: 20 }} />
+                    <Typography sx={{ fontSize: 11, color: C.slate, ml: 'auto' }}>Same filename detected — showing changes from previous submission</Typography>
+                  </Box>
+                  <Box sx={{ bgcolor: '#0f172a', maxHeight: 300, overflow: 'auto', p: 1 }}>
+                    {result.version_diff.split('\n').map((line, i) => {
+                      const isAdded = line.startsWith('+') && !line.startsWith('+++');
+                      const isRemoved = line.startsWith('-') && !line.startsWith('---');
+                      const isHunk = line.startsWith('@@');
+                      return (
+                        <Box key={i} sx={{ bgcolor: isAdded ? 'rgba(22,163,74,0.12)' : isRemoved ? 'rgba(220,38,38,0.12)' : 'transparent', borderLeft: isAdded ? `3px solid ${C.green}` : isRemoved ? `3px solid ${C.red}` : '3px solid transparent' }}>
+                          <Typography component="pre" sx={{ color: isAdded ? '#86efac' : isRemoved ? '#fca5a5' : isHunk ? '#93c5fd' : '#475569', fontSize: 11, fontFamily: 'monospace', m: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all', px: 1 }}>
+                            {line || ' '}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Paper>
+              )}
+
               {passed && (
                 <Paper variant="outlined" sx={{ borderRadius: 2, mb: 3, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
                   <Box sx={{ px: 3, py: 2, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -513,9 +596,12 @@ export default function UploadPipeline() {
             </Box>
           )}
 
-          <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+          <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
             <Button variant="outlined" onClick={reset} sx={{ borderColor: C.navy, color: C.navy, borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>← New Submission</Button>
             <Button variant="contained" href="/my-apis" component="a" sx={{ bgcolor: C.navy, '&:hover': { bgcolor: C.navyDk }, borderRadius: 1.5, textTransform: 'none', fontWeight: 600, boxShadow: 'none' }}>View in My APIs →</Button>
+            <Box sx={{ flex: 1 }} />
+            <Button variant="outlined" startIcon={<IconDownload size={15} />} onClick={exportCSV} sx={{ borderColor: C.border, color: C.slate, borderRadius: 1.5, textTransform: 'none', fontWeight: 600, fontSize: 12, '&:hover': { borderColor: C.navy, color: C.navy } }}>Export CSV</Button>
+            <Button variant="outlined" startIcon={<IconDownload size={15} />} onClick={exportPDF} sx={{ borderColor: C.border, color: C.slate, borderRadius: 1.5, textTransform: 'none', fontWeight: 600, fontSize: 12, '&:hover': { borderColor: C.navy, color: C.navy } }}>Export PDF</Button>
           </Box>
         </Box>
       )}
