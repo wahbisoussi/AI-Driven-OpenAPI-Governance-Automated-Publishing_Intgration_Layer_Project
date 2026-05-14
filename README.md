@@ -6,6 +6,8 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://grafana.com/)
 
 > **Production-grade API governance engine built for BIAT — Tunisia's leading private bank.**  
 > Automates the full OpenAPI lifecycle from upload to WSO2 deployment using AI-driven validation,  
@@ -114,8 +116,10 @@ Each specification moves through tracked states. **PUBLISHED** status is only re
 | Vector DB | PostgreSQL + PGVector | Embedding storage & similarity search |
 | Linting | Spectral | Structural rule enforcement (Microsoft REST Guidelines) |
 | API Management | WSO2 APIM 4.x | Enterprise API lifecycle & publishing |
-| Frontend | React.js | Governance dashboard & scoring UI |
-| DevOps | Docker Compose | Full environment orchestration |
+| Frontend | React.js + Material UI | Governance dashboard & scoring UI |
+| Reverse Proxy | Nginx | Routes `/api/` from frontend container to backend — no CORS |
+| Monitoring | Prometheus + Grafana | Real-time API metrics, request tracking, dashboards |
+| DevOps | Docker Compose | Full environment orchestration (6 services) |
 
 ---
 
@@ -124,15 +128,44 @@ Each specification moves through tracked states. **PUBLISHED** status is only re
 > ✅ **Completed** — React dashboard fully integrated with the backend via OAuth2 + JWT authentication.
 
 Delivered features:
-- **Upload Pipeline** — Drag-and-drop YAML upload with live step-by-step governance feedback
+- **Upload Pipeline** — Drag-and-drop YAML upload with live step-by-step governance feedback across 5 clickable tabs (Import → Audit → AI Engine → Gate → Publish)
 - **Governance Scorecards** — Per-spec structural score (0–100), error/warning counts, full Spectral violations table with severity badges
-- **AI Fix Panel** — Qwen 2.5 semantic analysis results and AI-suggested fixes surfaced per specification
+- **AI Fix Panel** — Qwen 2.5 semantic analysis results with before/after score comparison and AI-suggested fixes per specification
+- **AI Diff View** — Code viewer showing original vs AI-optimized YAML with line-level green highlighting of applied changes
+- **Version Diff** — When uploading a new version of an existing spec (same filename), a unified diff panel highlights exactly what changed vs the previous submission (green = added, red = removed)
+- **PDF Export** — One-click export of the full governance report (scores, violations, gate decision, WSO2 status) as a browser print-ready PDF
+- **CSV Export** — Download the full governance report as a structured CSV file for compliance records and audit trails
 - **Spec Management** — Browse, search, filter, and delete all specifications with status badges
 - **WSO2 Sync Status** — Real-time publication status (WSO2 external ID) per spec
 - **Analytics Dashboard** — Platform-wide KPIs: total APIs, published/rejected counts, average health score
 - **Authentication** — OAuth2 Password Flow + JWT (8h expiry), bcrypt-hashed passwords, brute-force lockout, JWT expiry guard on protected routes
 - **Settings** — Live user profile display, in-app password change wired to backend
-- **Dockerized** — Multi-stage nginx build, served on port 3000, orchestrated with Docker Compose
+- **Dockerized** — Multi-stage nginx build, served on port 3000, all API requests proxied through nginx to backend — zero CORS issues
+
+---
+
+## Monitoring
+
+The platform exposes real-time operational metrics via **Prometheus + Grafana** with ~250MB total RAM overhead.
+
+### What is tracked
+- HTTP request count per endpoint and HTTP method
+- Request rate (requests/second) per route
+- Response latency distribution
+- Error rates (4xx, 5xx)
+- Active in-progress requests
+
+### Access
+
+| Service | URL | Credentials |
+|---|---|---|
+| Prometheus (raw metrics) | `http://localhost:9090` | — |
+| Grafana (dashboards) | `http://localhost:3001` | `admin` / `biat2025` |
+
+### Grafana setup (first run only)
+1. Open `http://localhost:3001` → login
+2. **Connections → Data sources → Add → Prometheus** → URL: `http://prometheus:9090` → Save & Test
+3. **Dashboards → New → Import** → ID `14282` → select Prometheus → Import
 
 ---
 
@@ -162,7 +195,7 @@ through automated validation gates.
 
 ### Prerequisites
 
-- Docker Desktop with **minimum 8GB RAM allocated**
+- Docker Desktop with **minimum 8GB RAM allocated** (10GB recommended with monitoring enabled)
 - WSO2 API Manager installed and running on host machine
 
 ### 1. Clone the repository
@@ -191,6 +224,8 @@ DATABASE_URL=postgresql://user:pass@db:5432/gov_db
 docker compose up -d
 ```
 
+This starts **6 containers**: `postgres`, `ollama`, `backend`, `frontend`, `prometheus`, `grafana`.
+
 ### 4. Pull the AI model (required on first run)
 
 ```bash
@@ -199,13 +234,16 @@ docker exec -it api_governance_ollama ollama pull qwen2.5:1.5b
 
 > ⚠️ This step is required. Skipping it causes 404 errors during AI validation.
 
-### 5. Start the frontend
+### 5. Access the platform
 
-```bash
-cd frontend
-npm install
-npm start
-```
+| Service | URL |
+|---|---|
+| Frontend Dashboard | `http://localhost:3000` |
+| Backend API Docs | `http://localhost:8000/docs` |
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3001` |
+
+Default credentials: `biat_admin` / `biat6767`
 
 ---
 
@@ -213,9 +251,9 @@ npm start
 
 Once all services are running:
 
-**1. Open the interactive API docs**
+**1. Login to the dashboard**
 ```
-http://localhost:8000/docs
+http://localhost:3000
 ```
 
 **2. Submit a specification**
@@ -233,9 +271,14 @@ The system returns:
 - Structural compliance score
 - Semantic similarity score against existing catalog
 - AI-generated fix suggestions if validation fails
+- Version diff if a previous version of the same filename exists
 - Automated deployment confirmation if validation passes
 
-**4. Verify WSO2 deployment**
+**4. Export compliance report**
+
+After any pipeline run, use the **Export CSV** or **Export PDF** buttons in the pipeline result view to download a full governance report for audit trail purposes.
+
+**5. Verify WSO2 deployment**
 
 Compliant APIs appear automatically in your WSO2 Publisher in `PROTOTYPED` or `PUBLISHED`
 status with the Unlimited tier policy pre-assigned. No manual steps required.
@@ -255,7 +298,10 @@ review processes were creating bottlenecks and inconsistency across teams.
 - Comprehensive API Style Guide aligned with Microsoft REST Guidelines
 - AI-Powered OpenAPI Analysis Tool (this repository)
 - Governance Validation Pipeline
-- End-to-end lifecycle demonstration: import → test → publish
+- PDF/CSV compliance report generation for audit trails
+- API version diff tracking between specification submissions
+- Real-time operational monitoring via Prometheus + Grafana
+- End-to-end lifecycle demonstration: import → audit → AI fix → gate → publish
 
 ---
 
