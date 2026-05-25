@@ -8,8 +8,9 @@ import {
 import {
   IconArrowLeft, IconCircleCheck, IconCircleX, IconClock,
   IconRobot, IconCode, IconChevronDown, IconChevronUp, IconCopy,
-  IconShieldCheck
+  IconShieldCheck, IconEdit, IconDeviceFloppy, IconX, IconDownload
 } from '@tabler/icons-react';
+import { useToast } from 'contexts/ToastContext';
 import api from 'services/api';
 
 const C = {
@@ -61,6 +62,10 @@ export default function ApiDetail() {
   const [copied, setCopied] = useState(false);
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(true);
+  const [yamlEditing, setYamlEditing] = useState(false);
+  const [editedYaml, setEditedYaml] = useState('');
+  const [savingYaml, setSavingYaml] = useState(false);
+  const showToast = useToast();
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -91,6 +96,45 @@ export default function ApiDetail() {
     }
   };
 
+  const startEdit = () => {
+    setEditedYaml(spec?.raw_content || '');
+    setYamlEditing(true);
+    setYamlOpen(true);
+  };
+
+  const cancelEdit = () => {
+    setYamlEditing(false);
+    setEditedYaml('');
+  };
+
+  const saveYaml = async () => {
+    setSavingYaml(true);
+    try {
+      await api.patch(`/specs/${id}/content`, { raw_content: editedYaml });
+      setSpec(prev => ({ ...prev, raw_content: editedYaml }));
+      setYamlEditing(false);
+      showToast('YAML content saved successfully.', 'success');
+    } catch {
+      showToast('Failed to save YAML content.', 'error');
+    } finally {
+      setSavingYaml(false);
+    }
+  };
+
+  const downloadYaml = () => {
+    const content = yamlEditing ? editedYaml : spec?.raw_content;
+    if (!content) return;
+    const blob = new Blob([content], { type: 'text/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${spec?.title || `spec-${id}`}.yaml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const sc = spec ? statusMap(spec.workflow_status) : null;
 
   return (
@@ -100,7 +144,7 @@ export default function ApiDetail() {
           startIcon={<IconArrowLeft size={15} />}
           onClick={() => navigate('/my-apis')}
           sx={{ color: C.slate, textTransform: 'none', fontSize: 13, fontWeight: 600, px: 1.5, '&:hover': { bgcolor: C.navyLt, color: C.navy } }}>
-          My APIs
+          All APIs
         </Button>
         <Typography sx={{ color: C.border }}>›</Typography>
         <Typography sx={{ fontSize: 13, color: C.navy, fontWeight: 600 }}>
@@ -146,6 +190,20 @@ export default function ApiDetail() {
             <Grid item xs={6} md={3}><InfoCard label="Submitted" value={spec?.created_at ? new Date(spec.created_at).toLocaleString('en-GB') : null} /></Grid>
             <Grid item xs={6} md={3}><InfoCard label="WSO2 ID" value={spec?.external_id} mono /></Grid>
             <Grid item xs={6} md={3}><InfoCard label="AI Fix Applied" value={spec?.suggestions_applied ? 'Yes ✓' : 'No'} /></Grid>
+            {spec?.rejection_reason && (
+              <Grid item xs={12}>
+                <Box>
+                  <Typography sx={{ fontSize: 11, fontWeight: 600, color: C.slate, textTransform: 'uppercase', letterSpacing: 1, mb: 0.5 }}>
+                    {spec.workflow_status === 'REJECTED' ? 'Rejection Reason' : 'Admin Review Note'}
+                  </Typography>
+                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: spec.workflow_status === 'REJECTED' ? C.redLt : C.greenLt, border: `1px solid ${spec.workflow_status === 'REJECTED' ? '#fca5a5' : '#86efac'}` }}>
+                    <Typography sx={{ fontSize: 13, color: spec.workflow_status === 'REJECTED' ? C.red : C.green, lineHeight: 1.7 }}>
+                      {spec.rejection_reason}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+            )}
           </Grid>
         )}
       </Paper>
@@ -287,31 +345,74 @@ export default function ApiDetail() {
 
       <Paper variant="outlined" sx={{ borderRadius: 2, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
         <Box
-          sx={{ px: 3, py: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none', '&:hover': { bgcolor: C.bg } }}
-          onClick={() => setYamlOpen(v => !v)}>
+          sx={{ px: 3, py: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none', '&:hover': { bgcolor: C.bg }, cursor: yamlEditing ? 'default' : 'pointer' }}
+          onClick={() => { if (!yamlEditing) setYamlOpen(v => !v); }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <IconCode size={16} color={C.slate} />
             <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy }}>Raw YAML</Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {!loading && spec?.raw_content && (
-              <IconButton size="small" onClick={e => { e.stopPropagation(); copyYaml(); }}
-                sx={{ color: copied ? C.green : C.slate, borderRadius: 1 }} title="Copy YAML">
-                <IconCopy size={15} />
-              </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} onClick={e => e.stopPropagation()}>
+            {!loading && spec?.raw_content && !yamlEditing && (
+              <>
+                <IconButton size="small" onClick={downloadYaml}
+                  sx={{ color: C.slate, borderRadius: 1 }} title="Download YAML">
+                  <IconDownload size={15} />
+                </IconButton>
+                <IconButton size="small" onClick={copyYaml}
+                  sx={{ color: copied ? C.green : C.slate, borderRadius: 1 }} title="Copy YAML">
+                  <IconCopy size={15} />
+                </IconButton>
+                <IconButton size="small" onClick={startEdit}
+                  sx={{ color: C.slate, borderRadius: 1 }} title="Edit YAML">
+                  <IconEdit size={15} />
+                </IconButton>
+              </>
             )}
-            {yamlOpen ? <IconChevronUp size={16} color={C.slate} /> : <IconChevronDown size={16} color={C.slate} />}
+            {yamlEditing && (
+              <>
+                <IconButton size="small" onClick={downloadYaml}
+                  sx={{ color: C.slate, borderRadius: 1 }} title="Download YAML">
+                  <IconDownload size={15} />
+                </IconButton>
+                <Button size="small" variant="contained" onClick={saveYaml} disabled={savingYaml}
+                  startIcon={<IconDeviceFloppy size={14} />}
+                  sx={{ bgcolor: C.navy, textTransform: 'none', fontWeight: 600, fontSize: 12, borderRadius: 1, boxShadow: 'none', mr: 0.5, '&:hover': { bgcolor: C.navyDk } }}>
+                  {savingYaml ? 'Saving...' : 'Save'}
+                </Button>
+                <Button size="small" variant="outlined" onClick={cancelEdit}
+                  startIcon={<IconX size={14} />}
+                  sx={{ borderColor: C.border, color: C.slate, textTransform: 'none', fontWeight: 600, fontSize: 12, borderRadius: 1 }}>
+                  Cancel
+                </Button>
+              </>
+            )}
+            {!yamlEditing && (yamlOpen ? <IconChevronUp size={16} color={C.slate} /> : <IconChevronDown size={16} color={C.slate} />)}
           </Box>
         </Box>
         <Collapse in={yamlOpen}>
           <Divider />
-          <Box sx={{ p: 3, bgcolor: '#0f172a', maxHeight: 520, overflow: 'auto' }}>
-            {loading
-              ? <Skeleton variant="rectangular" height={200} sx={{ bgcolor: '#1e293b' }} />
-              : <Typography component="pre" sx={{ fontSize: 12, color: '#e2e8f0', fontFamily: 'monospace', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  {spec?.raw_content || 'No content available.'}
-                </Typography>}
-          </Box>
+          {yamlEditing ? (
+            <Box sx={{ p: 2 }}>
+              <textarea
+                value={editedYaml}
+                onChange={e => setEditedYaml(e.target.value)}
+                style={{
+                  width: '100%', minHeight: 480, fontFamily: 'monospace', fontSize: 12,
+                  backgroundColor: '#0f172a', color: '#e2e8f0', border: '1px solid #334155',
+                  borderRadius: 6, padding: '12px', resize: 'vertical', outline: 'none',
+                  lineHeight: 1.6, boxSizing: 'border-box'
+                }}
+              />
+            </Box>
+          ) : (
+            <Box sx={{ p: 3, bgcolor: '#0f172a', maxHeight: 520, overflow: 'auto' }}>
+              {loading
+                ? <Skeleton variant="rectangular" height={200} sx={{ bgcolor: '#1e293b' }} />
+                : <Typography component="pre" sx={{ fontSize: 12, color: '#e2e8f0', fontFamily: 'monospace', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {spec?.raw_content || 'No content available.'}
+                  </Typography>}
+            </Box>
+          )}
         </Collapse>
       </Paper>
     </Box>

@@ -40,6 +40,61 @@ function ScoreGauge({ score }) {
   );
 }
 
+function DonutChart({ data }) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  if (total === 0) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+        <svg width={120} height={120} viewBox="0 0 120 120">
+          <circle cx={60} cy={60} r={44} fill="none" stroke="#e2e8f0" strokeWidth={18} />
+        </svg>
+        <Typography sx={{ fontSize: 12, color: C.slate }}>No data yet</Typography>
+      </Box>
+    );
+  }
+  const r = 44, cx = 60, cy = 60, circum = 2 * Math.PI * r;
+  let offset = 0;
+  const slices = data.map(d => {
+    const pct = d.value / total;
+    const dash = pct * circum;
+    const slice = { ...d, dash, offset, pct };
+    offset += dash;
+    return slice;
+  });
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+      <Box sx={{ position: 'relative', flexShrink: 0 }}>
+        <svg width={120} height={120} viewBox="0 0 120 120" style={{ transform: 'rotate(-90deg)' }}>
+          {slices.map((s, i) => (
+            <circle key={i} cx={cx} cy={cy} r={r} fill="none"
+              stroke={s.color} strokeWidth={18}
+              strokeDasharray={`${s.dash} ${circum - s.dash}`}
+              strokeDashoffset={-s.offset}
+              style={{ transition: 'all 0.4s ease' }}
+            />
+          ))}
+        </svg>
+        <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <Typography sx={{ fontWeight: 800, fontSize: 22, color: C.navy, lineHeight: 1 }}>{total}</Typography>
+          <Typography sx={{ fontSize: 10, color: C.slate, mt: 0.3 }}>Total</Typography>
+        </Box>
+      </Box>
+      <Box sx={{ flex: 1 }}>
+        {data.map(d => (
+          <Box key={d.label} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: d.color, flexShrink: 0 }} />
+            <Typography sx={{ fontSize: 12, color: C.slate, flex: 1 }}>{d.label}</Typography>
+            <Typography sx={{ fontSize: 13, fontWeight: 700, color: d.color }}>{d.value}</Typography>
+            <Typography sx={{ fontSize: 11, color: C.slate, width: 38, textAlign: 'right' }}>
+              {total > 0 ? `${(d.value / total * 100).toFixed(0)}%` : '0%'}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
 function SkeletonCard() {
   return (
     <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -72,10 +127,16 @@ export default function Analytics() {
 
   useEffect(() => { fetchStats(); }, []);
 
-  const pending = stats ? Math.max(0, stats.total_apis - stats.published_count - stats.rejected_count) : 0;
+  const pending = stats?.pending_count ?? (stats ? Math.max(0, stats.total_apis - stats.published_count - stats.rejected_count) : 0);
   const passRate = stats && stats.total_apis > 0 ? (stats.published_count / stats.total_apis * 100) : 0;
   const rejectRate = stats && stats.total_apis > 0 ? (stats.rejected_count / stats.total_apis * 100) : 0;
   const pendingRate = stats && stats.total_apis > 0 ? (pending / stats.total_apis * 100) : 0;
+
+  const pieData = stats ? [
+    { label: 'Published', value: stats.published_count, color: C.green },
+    { label: 'Pending',   value: pending,                color: C.amber },
+    { label: 'Rejected',  value: stats.rejected_count,  color: C.red },
+  ] : [];
 
   const kpis = stats ? [
     { label: 'Total APIs', value: stats.total_apis, color: C.navy, bg: C.navyLt, icon: <IconApi size={20} color={C.navy} /> },
@@ -125,7 +186,7 @@ export default function Analytics() {
       </Grid>
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={12} md={5}>
+        <Grid item xs={12} md={4}>
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, border: `1px solid ${C.border}`, height: '100%' }}>
             <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy, mb: 2 }}>Health Score</Typography>
             {loading
@@ -133,7 +194,15 @@ export default function Analytics() {
               : <ScoreGauge score={stats?.average_health_score ?? 0} />}
           </Paper>
         </Grid>
-        <Grid item xs={12} md={7}>
+        <Grid item xs={12} md={4}>
+          <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, border: `1px solid ${C.border}`, height: '100%' }}>
+            <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy, mb: 2 }}>Status Distribution</Typography>
+            {loading
+              ? <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}><Skeleton variant="circular" width={120} height={120} /><Box sx={{ flex: 1 }}><Skeleton height={20} sx={{ mb: 1.5 }} /><Skeleton height={20} sx={{ mb: 1.5 }} /><Skeleton height={20} /></Box></Box>
+              : <DonutChart data={pieData} />}
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={4}>
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, border: `1px solid ${C.border}`, height: '100%' }}>
             <Typography sx={{ fontWeight: 700, fontSize: 13, color: C.navy, mb: 3 }}>Publication Rate</Typography>
             {loading ? (
@@ -148,8 +217,8 @@ export default function Analytics() {
                   sx={{ height: 10, borderRadius: 5, bgcolor: '#e2e8f0', mb: 3, '& .MuiLinearProgress-bar': { bgcolor: C.green, borderRadius: 5 } }} />
                 {[
                   { label: 'Published', value: stats?.published_count ?? 0, pct: passRate, color: C.green },
-                  { label: 'Rejected', value: stats?.rejected_count ?? 0, pct: rejectRate, color: C.red },
-                  { label: 'Pending', value: pending, pct: pendingRate, color: C.amber },
+                  { label: 'Rejected',  value: stats?.rejected_count ?? 0,  pct: rejectRate, color: C.red },
+                  { label: 'Pending',   value: pending, pct: pendingRate, color: C.amber },
                 ].map(row => (
                   <Box key={row.label} sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
                     <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: row.color, flexShrink: 0 }} />

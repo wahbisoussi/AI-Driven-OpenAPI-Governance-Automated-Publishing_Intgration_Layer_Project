@@ -4,11 +4,13 @@ import {
   Box, Typography, Paper, Chip, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, IconButton, CircularProgress,
   Alert, Button, TextField, InputAdornment, Grid, Skeleton, Dialog,
-  DialogTitle, DialogContent, DialogContentText, DialogActions
+  DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip
 } from '@mui/material';
-import { IconTrash, IconSearch, IconRefresh, IconApi, IconCircleCheck, IconCircleX, IconClock, IconChevronRight } from '@tabler/icons-react';
+import { IconTrash, IconSearch, IconRefresh, IconApi, IconCircleCheck, IconCircleX, IconClock, IconChevronRight, IconCheck, IconBan } from '@tabler/icons-react';
 import api from 'services/api';
 import { useToast } from 'contexts/ToastContext';
+
+const getCurrentUser = () => { try { return JSON.parse(sessionStorage.getItem('biat_user') || '{}'); } catch { return {}; } };
 
 const C = {
   navy: '#1e3a5f', navyLt: '#eef2f8', navyDk: '#162d4a',
@@ -22,18 +24,26 @@ const statusMap = (s) => {
   if (s === 'PUBLISHED') return { bg: C.greenLt, color: C.green, icon: <IconCircleCheck size={12} /> };
   if (s === 'REJECTED')  return { bg: C.redLt,   color: C.red,   icon: <IconCircleX size={12} /> };
   if (s === 'APPROVED')  return { bg: C.navyLt,  color: C.navy,  icon: <IconCircleCheck size={12} /> };
+  if (s === 'PENDING_APPROVAL') return { bg: C.amberLt, color: C.amber, icon: <IconClock size={12} /> };
   return { bg: C.amberLt, color: C.amber, icon: <IconClock size={12} /> };
 };
 
 export default function MyAPIs() {
   const navigate = useNavigate();
   const showToast = useToast();
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser.role === 'ADMIN';
   const [specs, setSpecs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [deleting, setDeleting] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
+  const [approving, setApproving] = useState(null);
+  const [approveDialogId, setApproveDialogId] = useState(null);
+  const [approveNote, setApproveNote] = useState('');
+  const [rejectDialogId, setRejectDialogId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const fetchSpecs = async () => {
     setLoading(true); setError(null);
@@ -66,11 +76,39 @@ export default function MyAPIs() {
     s.version?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const dispatchNotifRefresh = () => window.dispatchEvent(new Event('notifications:refresh'));
+
+  const handleApproveConfirm = async () => {
+    const id = approveDialogId;
+    setApproveDialogId(null);
+    setApproving(id);
+    try {
+      await api.post(`/specs/${id}/approve`, { note: approveNote.trim() || null });
+      setSpecs(prev => prev.map(s => s.id === id ? { ...s, workflow_status: 'PUBLISHED', rejection_reason: approveNote.trim() || null } : s));
+      showToast('Specification approved and published successfully.', 'success');
+      dispatchNotifRefresh();
+    } catch { showToast('Failed to approve specification.', 'error'); }
+    finally { setApproving(null); setApproveNote(''); }
+  };
+
+  const handleReject = async () => {
+    const id = rejectDialogId;
+    if (!rejectReason.trim()) { showToast('Please provide a rejection reason.', 'error'); return; }
+    setRejectDialogId(null);
+    try {
+      await api.post(`/specs/${id}/reject`, { reason: rejectReason });
+      setSpecs(prev => prev.map(s => s.id === id ? { ...s, workflow_status: 'REJECTED', rejection_reason: rejectReason } : s));
+      showToast('Specification rejected.', 'success');
+      dispatchNotifRefresh();
+    } catch { showToast('Failed to reject specification.', 'error'); }
+    finally { setRejectReason(''); }
+  };
+
   const stats = [
     { label: 'Total APIs', value: specs.length, color: C.navy, bg: C.navyLt },
     { label: 'Published', value: specs.filter(s => s.workflow_status === 'PUBLISHED').length, color: C.green, bg: C.greenLt },
     { label: 'Rejected', value: specs.filter(s => s.workflow_status === 'REJECTED').length, color: C.red, bg: C.redLt },
-    { label: 'Pending', value: specs.filter(s => !['PUBLISHED', 'REJECTED'].includes(s.workflow_status)).length, color: C.amber, bg: C.amberLt },
+    { label: 'Pending', value: specs.filter(s => s.workflow_status === 'PENDING_APPROVAL').length, color: C.amber, bg: C.amberLt },
   ];
 
   return (
@@ -81,9 +119,9 @@ export default function MyAPIs() {
           <Typography sx={{ fontSize: 11, fontWeight: 600, color: C.slate, textTransform: 'uppercase', letterSpacing: 1.5, mb: 0.5 }}>
             API Catalog
           </Typography>
-          <Typography sx={{ color: C.navy, fontWeight: 800, fontSize: 24 }}>My APIs</Typography>
+          <Typography sx={{ color: C.navy, fontWeight: 800, fontSize: 24 }}>All APIs</Typography>
           <Typography sx={{ color: C.slate, fontSize: 13 }}>
-            All specifications submitted through the governance pipeline.
+            {isAdmin ? 'All API specifications across all developers.' : 'API specifications you submitted through the governance pipeline.'}
           </Typography>
         </Box>
         <Button
@@ -165,7 +203,7 @@ export default function MyAPIs() {
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: C.bg }}>
-                  {['#', 'API Title', 'Version', 'Status', 'WSO2 ID', 'Submitted', ''].map(h => (
+                  {['#', 'API Title', 'Version', 'Status', 'Reason', 'WSO2 ID', 'Submitted', ''].map(h => (
                     <TableCell key={h} sx={{ fontWeight: 700, fontSize: 11, color: C.slate, textTransform: 'uppercase', letterSpacing: 0.6, py: 1.5, borderBottom: `1px solid ${C.border}` }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -196,14 +234,35 @@ export default function MyAPIs() {
                           sx={{ bgcolor: sc.bg, color: sc.color, fontWeight: 700, fontSize: 11 }}
                         />
                       </TableCell>
+                      <TableCell sx={{ maxWidth: 160 }}>
+                        {spec.rejection_reason
+                          ? <Tooltip title={spec.rejection_reason} arrow><Typography sx={{ fontSize: 11, color: C.red, cursor: 'help', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>{spec.rejection_reason}</Typography></Tooltip>
+                          : <Typography sx={{ fontSize: 11, color: C.slate }}>—</Typography>}
+                      </TableCell>
                       <TableCell sx={{ fontSize: 11, fontFamily: 'monospace', color: C.slate }}>
                         {spec.external_id ? spec.external_id.slice(0, 10) + '…' : '—'}
                       </TableCell>
                       <TableCell sx={{ fontSize: 12, color: C.slate, whiteSpace: 'nowrap' }}>
                         {spec.created_at ? new Date(spec.created_at).toLocaleDateString('en-GB') : '—'}
                       </TableCell>
-                      <TableCell sx={{ width: 72 }}>
+                      <TableCell sx={{ width: 120 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {isAdmin && spec.workflow_status === 'PENDING_APPROVAL' && (
+                            <>
+                              <Tooltip title="Approve and publish">
+                                <IconButton size="small" onClick={e => { e.stopPropagation(); setApproveDialogId(spec.id); setApproveNote(''); }} disabled={approving === spec.id}
+                                  sx={{ color: C.green, '&:hover': { bgcolor: C.greenLt }, borderRadius: 1 }}>
+                                  {approving === spec.id ? <CircularProgress size={14} /> : <IconCheck size={15} strokeWidth={2.5} />}
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Reject">
+                                <IconButton size="small" onClick={e => { e.stopPropagation(); setRejectDialogId(spec.id); setRejectReason(''); }}
+                                  sx={{ color: C.red, '&:hover': { bgcolor: C.redLt }, borderRadius: 1 }}>
+                                  <IconBan size={15} />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
                           <IconButton size="small"
                             onClick={e => { e.stopPropagation(); setConfirmId(spec.id); }}
                             disabled={deleting === spec.id}
@@ -230,6 +289,43 @@ export default function MyAPIs() {
           </Box>
         )}
       </Paper>
+
+      <Dialog open={!!approveDialogId} onClose={() => setApproveDialogId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: C.green }}>Approve Specification</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: 13, mb: 2 }}>You are about to approve and publish this specification to WSO2. Optionally add a review note that will be visible to the developer.</DialogContentText>
+          <TextField
+            autoFocus fullWidth multiline rows={3} placeholder="e.g. Approved after structural review. Minor improvements suggested for next version."
+            value={approveNote} onChange={e => setApproveNote(e.target.value)}
+            label="Review Note (optional)"
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5, fontSize: 13 } }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setApproveDialogId(null)} variant="outlined"
+            sx={{ borderColor: C.border, color: C.slate, textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}>Cancel</Button>
+          <Button onClick={handleApproveConfirm} variant="contained"
+            sx={{ bgcolor: C.green, textTransform: 'none', fontWeight: 600, borderRadius: 1.5, boxShadow: 'none', '&:hover': { bgcolor: '#15803d' } }}>Approve &amp; Publish</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!rejectDialogId} onClose={() => setRejectDialogId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: C.red }}>Reject Specification</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: 13, mb: 2 }}>Provide a reason for rejection. This will be sent to the developer as a notification.</DialogContentText>
+          <TextField
+            autoFocus fullWidth multiline rows={3} placeholder="e.g. Missing security definitions, naming not aligned with BIAT standards..."
+            value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5, fontSize: 13 } }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setRejectDialogId(null)} variant="outlined"
+            sx={{ borderColor: C.border, color: C.slate, textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}>Cancel</Button>
+          <Button onClick={handleReject} variant="contained"
+            sx={{ bgcolor: C.red, textTransform: 'none', fontWeight: 600, borderRadius: 1.5, boxShadow: 'none', '&:hover': { bgcolor: '#b91c1c' } }}>Reject</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={!!confirmId} onClose={() => setConfirmId(null)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 700, color: '#1e3a5f' }}>Delete Specification</DialogTitle>

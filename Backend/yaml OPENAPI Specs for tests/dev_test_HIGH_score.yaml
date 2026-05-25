@@ -1,0 +1,321 @@
+openapi: "3.0.3"
+info:
+  title: BIAT Digital Notifications API
+  description: >-
+    Enterprise notification service for BIAT digital banking platform.
+    Manages real-time alerts for transactions, account events, and
+    compliance notifications across all customer segments.
+  version: "2026-05-23"
+  termsOfService: https://api.biat.com.tn/terms
+  contact:
+    name: BIAT API Governance
+    url: https://api.biat.com.tn/support
+    email: api-governance@biat.com.tn
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: https://api.biat.com.tn/v1
+    description: Production Environment
+  - url: https://sandbox.biat.com.tn/v1
+    description: Sandbox Environment
+
+tags:
+  - name: Notifications
+    description: Customer notification management operations
+  - name: Subscriptions
+    description: Alert subscription configuration
+
+paths:
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List customer notifications
+      description: Returns a paginated list of notifications for the authenticated customer.
+      operationId: Notifications_List
+      security:
+        - OAuth2: [read:notifications]
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationList"
+        "400":
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication token missing or invalid
+        "403":
+          description: Insufficient permissions to access notifications
+        default:
+          description: An unexpected error occurred.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/{notificationId}:
+    get:
+      tags: [Notifications]
+      summary: Get a specific notification
+      description: Retrieves the full details of a single notification by its unique identifier.
+      operationId: Notifications_Get
+      security:
+        - OAuth2: [read:notifications]
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          description: UUID of the target notification
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Notification retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+        "400":
+          description: Invalid notification ID format
+        "401":
+          description: Authentication required
+        "404":
+          description: Notification not found
+        default:
+          description: An unexpected error occurred.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags: [Notifications]
+      summary: Update notification read status
+      description: Updates the read status of a specific notification for the authenticated customer.
+      operationId: Notifications_Update
+      security:
+        - OAuth2: [write:notifications]
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          description: UUID of the notification to update
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationUpdate"
+      responses:
+        "200":
+          description: Notification status updated successfully
+        "400":
+          description: Invalid request body
+        "401":
+          description: Authentication required
+        "404":
+          description: Notification not found
+        default:
+          description: An unexpected error occurred.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /subscriptions:
+    post:
+      tags: [Subscriptions]
+      summary: Create a notification subscription
+      description: Registers a new alert subscription for a specific banking event category.
+      operationId: Subscriptions_Create
+      security:
+        - OAuth2: [write:notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionRequest"
+      responses:
+        "201":
+          description: Subscription created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        "400":
+          description: Invalid subscription configuration
+        "401":
+          description: Authentication required
+        "409":
+          description: Subscription already exists for this event type
+        default:
+          description: An unexpected error occurred.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: OAuth2 Client Credentials flow for BIAT internal services
+      flows:
+        clientCredentials:
+          tokenUrl: https://api.biat.com.tn/oauth/token
+          scopes:
+            read:notifications: Read notification data
+            write:notifications: Create and update notifications
+
+  schemas:
+    Notification:
+      description: A single banking event notification delivered to a customer.
+      type: object
+      required:
+        - notificationId
+        - eventType
+        - message
+        - createdAt
+        - read
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+          description: Unique identifier for the notification
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        eventType:
+          type: string
+          description: Category of the banking event that triggered this notification
+          enum: [TRANSACTION, ACCOUNT_UPDATE, SECURITY_ALERT, COMPLIANCE]
+          example: "TRANSACTION"
+        message:
+          type: string
+          description: Human-readable notification message in customer language
+          example: "A debit of 250.00 TND was processed on your account."
+        read:
+          type: boolean
+          description: Whether the customer has acknowledged this notification
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the notification was generated
+
+    NotificationList:
+      description: Paginated collection of customer notification records.
+      type: object
+      required:
+        - items
+        - totalCount
+      properties:
+        items:
+          type: array
+          description: Page of notification objects
+          items:
+            $ref: "#/components/schemas/Notification"
+        totalCount:
+          type: integer
+          description: Total notifications available for this customer
+          example: 42
+        page:
+          type: integer
+          description: Current page index
+          example: 1
+
+    NotificationUpdate:
+      description: Payload for updating the read status of a notification.
+      type: object
+      required:
+        - read
+      properties:
+        read:
+          type: boolean
+          description: New read status to apply to the notification
+          example: true
+
+    SubscriptionRequest:
+      description: Request payload for registering a new notification subscription.
+      type: object
+      required:
+        - eventType
+        - channel
+      properties:
+        eventType:
+          type: string
+          description: Banking event category to subscribe to
+          enum: [TRANSACTION, ACCOUNT_UPDATE, SECURITY_ALERT, COMPLIANCE]
+        channel:
+          type: string
+          description: Notification delivery channel
+          enum: [PUSH, EMAIL, SMS]
+        thresholdAmount:
+          type: number
+          description: Minimum transaction amount to trigger notification
+          example: 100.00
+
+    Subscription:
+      description: A configured notification subscription for a customer alert type.
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+          format: uuid
+          description: Unique identifier for the subscription
+        eventType:
+          type: string
+          description: Subscribed event category
+        channel:
+          type: string
+          description: Selected delivery channel
+        createdAt:
+          type: string
+          format: date-time
+          description: Subscription creation timestamp
+
+    ErrorResponse:
+      description: Standard error response structure returned on API failures.
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "INVALID_PARAMETER"
+        message:
+          type: string
+          description: Human-readable error description for the developer
+
+security:
+  - OAuth2: []

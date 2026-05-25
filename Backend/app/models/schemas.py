@@ -9,6 +9,7 @@ class WorkflowStatus(enum.Enum):
     VALIDATED = "VALIDATED"
     AI_REVIEWED = "AI_REVIEWED"
     PENDING_REVIEW = "PENDING_REVIEW"
+    PENDING_APPROVAL = "PENDING_APPROVAL"
     PROTOTYPE_READY = "PROTOTYPE_READY"
     PUBLISHED = "PUBLISHED"
     REJECTED = "REJECTED"
@@ -27,6 +28,15 @@ class WSO2State(enum.Enum):
 class ManualReviewPayload(BaseModel):
     decision: str
     notes: str
+
+class RejectPayload(BaseModel):
+    reason: str
+
+class ApprovePayload(BaseModel):
+    note: Optional[str] = None
+
+class ContentUpdatePayload(BaseModel):
+    raw_content: str
 
 # --- NEW UPDATES (ADDED) ---
 
@@ -49,8 +59,9 @@ class APISpecificationRead(BaseModel):
     suggestions_applied: bool
     user_justification: Optional[str] = None
     user_id: Optional[int] = None
-    
+    rejection_reason: Optional[str] = None
+
     # This nests the SemanticAnalysis data inside the Spec response
-    semantic_analysis: Optional[SemanticAnalysisRead] = None 
+    semantic_analysis: Optional[SemanticAnalysisRead] = None
 
     model_config = ConfigDict(from_attributes=True)

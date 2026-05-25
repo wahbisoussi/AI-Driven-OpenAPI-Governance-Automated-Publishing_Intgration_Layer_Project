@@ -21,7 +21,7 @@ const dashboard = {
     },
     {
       id: 'my-apis',
-      title: 'My APIs',
+      title: 'All APIs',
       type: 'item',
       url: '/my-apis',
       icon: icons.IconApi,

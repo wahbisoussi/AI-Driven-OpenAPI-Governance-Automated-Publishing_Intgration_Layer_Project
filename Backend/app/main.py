@@ -11,6 +11,7 @@ from app.models.specification import APISpecification
 from app.models.governance_report import GovernanceReport
 from app.models.audit_results import StructuralReport, ViolationDetail
 from app.models.ai_analysis import SemanticAnalysis
+from app.models.notification import Notification
 
 # --- 2. Import Routers ---
 from app.api.v1.endpoints import specs
@@ -31,6 +32,16 @@ async def lifespan(app: FastAPI):
             print("🧠 PGVector extension verified.")
     except Exception as e:
         print(f"⚠️ Vector Extension Error: {e}")
+
+    # --- Schema migrations for existing tables ---
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TYPE workflowstatus ADD VALUE IF NOT EXISTS 'PENDING_APPROVAL';"))
+            conn.execute(text("ALTER TABLE api_specifications ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR;"))
+            conn.commit()
+            print("✅ Schema migrations applied.")
+    except Exception as e:
+        print(f"⚠️ Migration warning (safe to ignore if tables don't exist yet): {e}")
 
     # Now create tables (Postgres now knows what 'vector' is)
     Base.metadata.create_all(bind=engine)
@@ -54,6 +65,19 @@ async def lifespan(app: FastAPI):
             admin_user.password_hash = hash_password("biat6767")
             db.commit()
             print("🔐 System User password reset to valid bcrypt hash.")
+
+        # --- Seed default dev user for testing ---
+        dev_user = db.query(User).filter(User.username == "biat_dev").first()
+        if not dev_user:
+            db.add(User(
+                username="biat_dev",
+                email="dev@biat.com.tn",
+                password_hash=hash_password("dev1234"),
+                role="DEV",
+                department="DIGITAL_BANKING"
+            ))
+            db.commit()
+            print("👤 Default dev user created: biat_dev / dev1234")
     except Exception as e:
         print(f"⚠️ Startup User Error: {e}")
     finally:

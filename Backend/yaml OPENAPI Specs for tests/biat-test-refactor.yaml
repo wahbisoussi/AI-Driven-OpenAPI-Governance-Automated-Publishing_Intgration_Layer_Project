@@ -1,0 +1,23 @@
+openapi: 3.0.0
+info:
+  title: BIAT Quick Transfer
+  version: "1.0"
+  description: API to move money.
+paths:
+  /send-money:
+    get:
+      summary: Send money to someone
+      parameters:
+        - name: to_account
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: amount
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Done

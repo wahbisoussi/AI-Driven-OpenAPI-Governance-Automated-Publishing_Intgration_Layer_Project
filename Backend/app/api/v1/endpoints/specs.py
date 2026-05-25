@@ -2,7 +2,7 @@ import shutil
 import os
 import difflib
 from typing import List
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Body
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
 from fastapi.encoders import jsonable_encoder
@@ -12,8 +12,9 @@ from app.services.governance_service import run_governance_pipeline
 from app.models.specification import APISpecification
 from app.models.governance_report import GovernanceReport
 from app.models.audit_results import StructuralReport, ViolationDetail
-from app.models.schemas import WorkflowStatus, APISpecificationRead
+from app.models.schemas import WorkflowStatus, APISpecificationRead, RejectPayload, ApprovePayload, ContentUpdatePayload
 from app.models.user import User
+from app.models.notification import Notification
 from app.ai.llm_engine import LLMEngine
 from app.services.publisher_service import import_api_from_yaml, publish_api_full_lifecycle
 from app.core.deps import get_current_user
@@ -33,12 +34,14 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
             content = f.read()
             
         # 🟢 STEP 1: Run Governance Pipeline
+        is_admin = current_user.role == "ADMIN"
         pipeline_result = run_governance_pipeline(
             db=db,
             title=file.filename,
             version="1.0.0",
             content=content,
-            user_id=current_user.id
+            user_id=current_user.id,
+            is_admin=is_admin
         )
 
         spec_id = pipeline_result.get("spec_id")
@@ -65,23 +68,29 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
             version_diff = ''.join(diff_lines) if diff_lines else None
             previous_version_id = previous_spec.id
 
-        # 🪄 STEP 2: MANDATORY AI REFACTORING
+        # 🪄 STEP 2: MANDATORY AI REFACTORING (only when structural violations exist)
         ai_suggestions = pipeline_result.get("ai_analysis", {}).get("suggestions")
-        
-        if ai_suggestions and "Architecture is sound" not in ai_suggestions:
+        violations = pipeline_result.get("violations", [])
+
+        if violations and ai_suggestions and "Architecture is sound" not in ai_suggestions:
             print(f"🪄 MANDATORY AUTO-FIX: Refactoring {file.filename}...")
             fixed_yaml = llm_engine.apply_suggestion_to_yaml(spec.raw_content, ai_suggestions)
             
             if fixed_yaml and "openapi" in fixed_yaml.lower():
-                spec.raw_content = fixed_yaml
-                spec.suggestions_applied = True
-                db.commit() 
+                # Guard: reject AI fix if it creates duplicate operationIds (breaks WSO2)
+                op_ids = [l.split("operationId:")[-1].strip() for l in fixed_yaml.splitlines() if "operationId:" in l]
+                if len(op_ids) == len(set(op_ids)):
+                    spec.raw_content = fixed_yaml
+                    spec.suggestions_applied = True
+                    db.commit()
+                else:
+                    print(f"⚠️ AI fix produced duplicate operationIds — keeping original content")
 
-        # 🚀 STEP 3: THE ONLY WSO2 SYNC
+        # 🚀 STEP 3: WSO2 SYNC (admin path only — normal user ≥80% is handled in governance_service)
         allowed_statuses = ["PROTOTYPE_READY", "AWAITING_FIX_CONFIRMATION", "PUBLISHED"]
         decision = pipeline_result.get("governance_decision")
 
-        if decision in allowed_statuses or spec.workflow_status == WorkflowStatus.PUBLISHED:
+        if (decision in allowed_statuses or spec.workflow_status == WorkflowStatus.PUBLISHED) and not spec.external_id:
             print(f"🚀 Gate Cleared! Pushing FIXED version to WSO2...")
             
             final_temp_path = f"final_fixed_{spec_id}.yaml"
@@ -105,6 +114,35 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
                 if os.path.exists(final_temp_path):
                     os.remove(final_temp_path)
                     
+        # 🔔 NOTIFICATIONS
+        structural_score = pipeline_result.get("structural_score", 0)
+        if not is_admin:
+            admins = db.query(User).filter(User.role == "ADMIN").all()
+            if spec.workflow_status == WorkflowStatus.PENDING_APPROVAL:
+                for admin in admins:
+                    db.add(Notification(
+                        user_id=admin.id,
+                        message=f"{current_user.username} submitted '{file.filename}' (score {round(structural_score, 1)}%) — pending your review and approval.",
+                        spec_id=spec.id,
+                        notification_type="PENDING_APPROVAL"
+                    ))
+            elif spec.workflow_status == WorkflowStatus.PUBLISHED:
+                for admin in admins:
+                    db.add(Notification(
+                        user_id=admin.id,
+                        message=f"'{file.filename}' submitted by {current_user.username} was auto-published. Structural score: {round(structural_score, 1)}%.",
+                        spec_id=spec.id,
+                        notification_type="AUTO_PUBLISHED"
+                    ))
+            elif spec.workflow_status == WorkflowStatus.REJECTED:
+                db.add(Notification(
+                    user_id=current_user.id,
+                    message=f"Your specification '{file.filename}' was automatically rejected. Structural score {round(structural_score, 1)}% did not meet the 50% minimum threshold.",
+                    spec_id=spec.id,
+                    notification_type="REJECTION"
+                ))
+            db.commit()
+
         return {
             "status": "SUCCESS" if spec.workflow_status == WorkflowStatus.PUBLISHED else "PARTIAL_SUCCESS",
             "spec_id": spec.id,
@@ -125,10 +163,10 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
 # --- 2. RETRIEVE SPECS ---
 @router.get("/all_specs", response_model=List[APISpecificationRead])
 def get_all_specs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    specs = db.query(APISpecification).options(
-        joinedload(APISpecification.semantic_analysis)
-    ).all()
-    return specs if specs else []
+    query = db.query(APISpecification).options(joinedload(APISpecification.semantic_analysis))
+    if current_user.role != "ADMIN":
+        query = query.filter(APISpecification.user_id == current_user.id)
+    return query.all() or []
 
 @router.get("/{spec_id}/report")
 def get_spec_report(spec_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -182,7 +220,8 @@ def get_spec_by_id(spec_id: int, db: Session = Depends(get_db), current_user: Us
         "created_at": spec.created_at.isoformat() if spec.created_at else None,
         "suggestions_applied": spec.suggestions_applied,
         "user_id": spec.user_id,
-        "external_id": spec.external_id
+        "external_id": spec.external_id,
+        "rejection_reason": spec.rejection_reason,
     }
 
     if spec.semantic_analysis:
@@ -203,14 +242,125 @@ def get_governance_stats(db: Session = Depends(get_db), current_user: User = Dep
     
     avg_score = db.execute(text("SELECT AVG(score) FROM structural_reports")).scalar() or 0
     
+    pending = db.query(APISpecification).filter(APISpecification.workflow_status == WorkflowStatus.PENDING_APPROVAL).count()
+
     return {
         "total_apis": total,
         "published_count": published,
         "rejected_count": rejected,
+        "pending_count": pending,
         "average_health_score": round(float(avg_score), 2)
     }
 
-# --- 4. DELETE BY ID ---
+# --- 4. ADMIN APPROVE / REJECT ---
+@router.post("/{spec_id}/approve")
+def approve_spec(spec_id: int, payload: ApprovePayload = Body(default=ApprovePayload()), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Only admins can approve specs.")
+    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
+    if not spec:
+        raise HTTPException(status_code=404, detail="Spec not found.")
+    if spec.workflow_status != WorkflowStatus.PENDING_APPROVAL:
+        raise HTTPException(status_code=400, detail="Spec is not pending approval.")
+
+    final_temp_path = f"approve_temp_{spec_id}.yaml"
+    wso2_id = None
+    try:
+        with open(final_temp_path, "w") as f:
+            f.write(spec.raw_content)
+        wso2_id = import_api_from_yaml(final_temp_path)
+    except Exception as e:
+        print(f"WSO2 approval error: {e}")
+    finally:
+        if os.path.exists(final_temp_path):
+            os.remove(final_temp_path)
+
+    spec.workflow_status = WorkflowStatus.PUBLISHED
+    if wso2_id:
+        spec.external_id = wso2_id
+    if payload.note:
+        spec.rejection_reason = payload.note
+    db.commit()
+
+    note_text = f" Note: {payload.note}" if payload.note else ""
+    db.add(Notification(
+        user_id=spec.user_id,
+        message=f"Your API specification '{spec.title}' has been reviewed, approved, and published by {current_user.username}.{note_text}",
+        spec_id=spec_id,
+        notification_type="APPROVAL"
+    ))
+    db.commit()
+    return {"status": "APPROVED", "spec_id": spec_id, "wso2_id": wso2_id}
+
+
+@router.post("/{spec_id}/reject")
+def reject_spec(spec_id: int, payload: RejectPayload, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Only admins can reject specs.")
+    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
+    if not spec:
+        raise HTTPException(status_code=404, detail="Spec not found.")
+
+    spec.workflow_status = WorkflowStatus.REJECTED
+    spec.rejection_reason = payload.reason
+    db.commit()
+
+    db.add(Notification(
+        user_id=spec.user_id,
+        message=f"Your API specification '{spec.title}' was rejected after review. Reason: {payload.reason}",
+        spec_id=spec_id,
+        notification_type="REJECTION"
+    ))
+    db.commit()
+    return {"status": "REJECTED", "spec_id": spec_id, "reason": payload.reason}
+
+
+# --- 4b. PATCH YAML CONTENT ---
+@router.patch("/{spec_id}/content")
+def update_spec_content(spec_id: int, payload: ContentUpdatePayload, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
+    if not spec:
+        raise HTTPException(status_code=404, detail="Spec not found.")
+    if spec.user_id != current_user.id and current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Not authorized to edit this spec.")
+    spec.raw_content = payload.raw_content
+    db.commit()
+    return {"status": "UPDATED", "spec_id": spec_id}
+
+
+# --- NOTIFICATIONS ---
+@router.get("/notifications/list")
+def get_notifications(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    notifs = db.query(Notification).filter(
+        Notification.user_id == current_user.id
+    ).order_by(Notification.created_at.desc()).limit(30).all()
+    return [
+        {
+            "id": n.id,
+            "message": n.message,
+            "is_read": n.is_read,
+            "notification_type": n.notification_type,
+            "spec_id": n.spec_id,
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+        }
+        for n in notifs
+    ]
+
+
+@router.patch("/notifications/{notif_id}/read")
+def mark_notification_read(notif_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    notif = db.query(Notification).filter(
+        Notification.id == notif_id,
+        Notification.user_id == current_user.id
+    ).first()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found.")
+    notif.is_read = True
+    db.commit()
+    return {"status": "READ"}
+
+
+# --- 5. DELETE BY ID ---
 @router.delete("/{spec_id}")
 def delete_spec_by_id(spec_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()

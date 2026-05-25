@@ -1,0 +1,139 @@
+openapi: "3.0.3"
+info:
+  title: BIAT Customer Inquiry API
+  description: "Customer data"
+  version: "2026-05-23"
+  contact:
+    name: BIAT Support
+    email: support@biat.com.tn
+
+servers:
+  - url: https://api.biat.com.tn/v1
+
+paths:
+  /customers/{customerId}:
+    get:
+      summary: Get customer profile
+      security:
+        - Bearer: [read]
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Customer profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          description: Bad request
+
+  /customers/{customerId}/accounts:
+    get:
+      summary: Get customer accounts
+      security:
+        - Bearer: [read]
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of bank accounts
+        "400":
+          description: Bad request
+
+  /customers/{customerId}/transactions:
+    get:
+      summary: Get transaction history
+      security:
+        - Bearer: [read]
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transaction history list
+        "400":
+          description: Bad request
+
+  /customers:
+    post:
+      summary: Create a new customer record
+      security:
+        - Bearer: [write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerRequest"
+      responses:
+        "201":
+          description: Customer created successfully
+        "400":
+          description: Bad request
+
+  /customers/{customerId}/kyc:
+    get:
+      summary: Get KYC status
+      security:
+        - Bearer: [read]
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: KYC status retrieved
+        "400":
+          description: Bad request
+
+components:
+  securitySchemes:
+    Bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Customer:
+      type: object
+      properties:
+        customerId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phoneNumber:
+          type: string
+        accountStatus:
+          type: string
+
+    CustomerRequest:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string

@@ -12,7 +12,7 @@ from app.services.governance_gate import evaluate_api_compliance
 
 MIN_SCORE_FOR_AI = 10
 
-def run_governance_pipeline(db: Session, title: str, version: str, content: str, user_id: int):
+def run_governance_pipeline(db: Session, title: str, version: str, content: str, user_id: int, is_admin: bool = True):
     ai_service = AIService()
 
     # --- 1. DUPLICATE DETECTION ---
@@ -74,18 +74,32 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
             if ai_report:
                 similarity_score = float(ai_report.similarity_score)
                 ai_suggestions = ai_report.ai_suggested_fix or ai_suggestions
-                if ai_report.ai_suggested_fix:
+                # Only rewrite YAML when there are actual structural violations to fix
+                has_violations = audit_results.get("total_errors", 0) > 0 or audit_results.get("total_warnings", 0) > 0
+                if ai_report.ai_suggested_fix and has_violations:
                     from app.ai.llm_engine import LLMEngine
                     fixed_content = LLMEngine().apply_suggestion_to_yaml(content, ai_report.ai_suggested_fix)
-                    if fixed_content:
-                        new_spec.raw_content = fixed_content
-                        new_spec.suggestions_applied = True
-                        with open(temp_file_path, "w") as f: f.write(fixed_content)
+                    if fixed_content and "openapi" in fixed_content.lower():
+                        # Guard: reject AI fix if it creates duplicate operationIds (breaks WSO2)
+                        op_ids = [l.split("operationId:")[-1].strip() for l in fixed_content.splitlines() if "operationId:" in l]
+                        if len(op_ids) == len(set(op_ids)):
+                            new_spec.raw_content = fixed_content
+                            new_spec.suggestions_applied = True
+                            with open(temp_file_path, "w") as f: f.write(fixed_content)
+                        else:
+                            print(f"⚠️ AI fix produced duplicate operationIds — keeping original content")
 
         # --- 5. GOVERNANCE GATE EVALUATION ---
         # 'report' is now defined above
-        gate = evaluate_api_compliance(report.score, similarity_score, new_spec.suggestions_applied)
-        new_spec.workflow_status = WorkflowStatus(gate["status"])
+        gate = evaluate_api_compliance(report.score, similarity_score, new_spec.suggestions_applied, is_admin=is_admin)
+        # Map gate statuses that have no matching WorkflowStatus enum value:
+        #   "APPROVED"                → PUBLISHED  (dev ≥80%, WSO2 block below overwrites on failure)
+        #   "AWAITING_FIX_CONFIRMATION" → PROTOTYPE_READY  (admin moderate similarity, still deploys via specs.py)
+        _gate_to_status = {
+            "APPROVED": WorkflowStatus.PUBLISHED,
+            "AWAITING_FIX_CONFIRMATION": WorkflowStatus.PROTOTYPE_READY,
+        }
+        new_spec.workflow_status = _gate_to_status.get(gate["status"]) or WorkflowStatus(gate["status"])
 
         db.add(GovernanceReport(
             api_spec_id=new_spec.id,
@@ -97,6 +111,8 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         db.commit()
 
         # --- 6. WSO2 DEPLOYMENT (Integrated) ---
+        # "APPROVED" = normal user with score ≥80% (auto-publish path)
+        # "PROTOTYPE_READY" = admin success path (specs.py handles WSO2 for admin)
         if gate["status"] == "APPROVED":
             try:
                 from app.services.publisher_service import import_api_from_yaml
@@ -115,6 +131,7 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
                 if api_id:
                     print(f"✅ WSO2 DEPLOYMENT SUCCESS: API ID {api_id}")
                     new_spec.workflow_status = WorkflowStatus.PUBLISHED
+                    new_spec.external_id = api_id
                     db.commit()
                 else:
                     print(f"❌ WSO2 DEPLOYMENT FAILED")
@@ -131,15 +148,19 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
         return {
             "spec_id": new_spec.id,
             "status": new_spec.workflow_status.value,
-            "governance_decision": gate["status"], 
-            "structural_score": report.score,  # ✅ ADDED: Your score is back
-            "violations": audit_results["violations"], # ✅ ADDED: Your audit details are back
-            "refactored_yaml": new_spec.raw_content, # ✅ ADDED: See the AI changes
+            "governance_decision": gate["status"],
+            "structural_score": report.score,
+            "violations": audit_results["violations"],
+            "refactored_yaml": new_spec.raw_content,
             "ai_analysis": {
                 "similarity": similarity_score,
                 "suggestions": ai_suggestions
             },
-            "deployment_status": "SUCCESS" if new_spec.workflow_status == WorkflowStatus.PUBLISHED else "FAILED"
+            "deployment_status": (
+                "SUCCESS" if new_spec.workflow_status == WorkflowStatus.PUBLISHED
+                else "PENDING" if new_spec.workflow_status == WorkflowStatus.PENDING_APPROVAL
+                else "FAILED"
+            )
         }
 
     except Exception as e:

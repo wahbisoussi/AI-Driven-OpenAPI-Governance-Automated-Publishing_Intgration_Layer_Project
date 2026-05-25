@@ -1,0 +1,55 @@
+openapi: "3.0.3"
+info:
+  title: BIAT Legacy Payments
+  version: "v1.0"
+  contact:
+    name: BIAT Team
+
+servers:
+  - url: http://api.biat.com.tn/v1
+    description: Internal server
+
+paths:
+  /transfers:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Transfer"
+      responses:
+        "200":
+          description: Transfer processed
+
+  /payments:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Payment done
+
+  /accounts:
+    get:
+      responses:
+        "200":
+          description: Accounts list
+
+components:
+  schemas:
+    Transfer:
+      type: object
+      properties:
+        Source_Account:
+          type: string
+        Destination_Account:
+          type: string
+        Amount:
+          type: number
+        Currency_Code:
+          type: string

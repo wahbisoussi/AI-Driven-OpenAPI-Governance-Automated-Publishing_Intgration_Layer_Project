@@ -2,14 +2,15 @@ import { useState, useRef, useCallback } from 'react';
 import {
   Box, Typography, Button, LinearProgress, Paper, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Alert, CircularProgress, Grid, Divider
+  Alert, CircularProgress, Grid, Divider, Tooltip
 } from '@mui/material';
 import {
   IconCloudUpload, IconCheck,
   IconShieldCheck, IconRocket, IconFileUpload, IconAlertCircle, IconCopy,
-  IconDownload, IconGitCompare
+  IconDownload, IconGitCompare, IconEdit, IconDeviceFloppy, IconX
 } from '@tabler/icons-react';
 import api from 'services/api';
+import { useToast } from 'contexts/ToastContext';
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -116,6 +117,7 @@ function ScoreGauge({ score }) {
 }
 
 export default function UploadPipeline() {
+  const showToast = useToast();
   const [step, setStep] = useState(1);
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState(null);
@@ -128,6 +130,9 @@ export default function UploadPipeline() {
   const [specData, setSpecData] = useState(null);
   const [reportData, setReportData] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedYaml, setEditedYaml] = useState('');
+  const [saving, setSaving] = useState(false);
   const inputRef = useRef();
 
   const readFileContent = (f) => {
@@ -169,6 +174,7 @@ export default function UploadPipeline() {
       const uploadResult = res.data;
       // Stop the loading spinner immediately — show results now
       setResult(uploadResult); setStep(5); setActiveTab(5); setLoading(false);
+      window.dispatchEvent(new Event('notifications:refresh'));
       simulateDeployLog();
       // Fire secondary fetches in background — failures won't break the result view
       const specId = uploadResult.spec_id;
@@ -190,6 +196,23 @@ export default function UploadPipeline() {
   const reset = () => {
     setStep(1); setFile(null); setResult(null); setError(null);
     setDeployLog([]); setSpecData(null); setReportData(null); setOriginalYaml(''); setActiveTab(5);
+    setEditMode(false); setEditedYaml('');
+  };
+
+  const handleSaveYaml = async () => {
+    const specId = result?.spec_id;
+    if (!specId || !editedYaml.trim()) return;
+    setSaving(true);
+    try {
+      await api.patch(`/specs/${specId}/content`, { raw_content: editedYaml });
+      setSpecData(prev => ({ ...prev, raw_content: editedYaml }));
+      setEditMode(false);
+      showToast('YAML saved successfully.', 'success');
+    } catch {
+      showToast('Failed to save. Check the YAML syntax.', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const structural = reportData?.structural;
@@ -413,15 +436,55 @@ ${result?.wso2_id ? `<div class="sec">WSO2 Deployment</div><div class="box">Depl
                   <Box sx={{ px: 2.5, py: 1.5, bgcolor: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                       <Typography sx={{ color: '#94a3b8', fontSize: 12, fontFamily: 'monospace' }}>{file?.name || 'spec.yaml'}</Typography>
-                      <Chip label="OPTIMIZED" size="small" sx={{ bgcolor: 'rgba(22,163,74,0.15)', color: C.green, fontWeight: 700, fontSize: 10, height: 20, border: `1px solid rgba(22,163,74,0.3)` }} />
+                      <Chip label={editMode ? 'EDITING' : 'OPTIMIZED'} size="small"
+                        sx={{ bgcolor: editMode ? 'rgba(59,130,246,0.15)' : 'rgba(22,163,74,0.15)', color: editMode ? '#60a5fa' : C.green, fontWeight: 700, fontSize: 10, height: 20, border: `1px solid ${editMode ? 'rgba(59,130,246,0.3)' : 'rgba(22,163,74,0.3)'}` }} />
                     </Box>
-                    <Button size="small" startIcon={<IconCopy size={13} />} onClick={copyFixed}
-                      sx={{ color: copied ? C.green : '#94a3b8', fontSize: 11, textTransform: 'none', minWidth: 0, p: '2px 8px', '&:hover': { color: '#fff' } }}>
-                      {copied ? 'Copied!' : 'Copy'}
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      {!editMode ? (
+                        <>
+                          <Button size="small" startIcon={<IconCopy size={13} />} onClick={copyFixed}
+                            sx={{ color: copied ? C.green : '#94a3b8', fontSize: 11, textTransform: 'none', minWidth: 0, p: '2px 8px', '&:hover': { color: '#fff' } }}>
+                            {copied ? 'Copied!' : 'Copy'}
+                          </Button>
+                          {fixedYaml && (
+                            <Tooltip title="Edit YAML manually">
+                              <Button size="small" startIcon={<IconEdit size={13} />}
+                                onClick={() => { setEditedYaml(fixedYaml); setEditMode(true); }}
+                                sx={{ color: '#94a3b8', fontSize: 11, textTransform: 'none', minWidth: 0, p: '2px 8px', '&:hover': { color: '#fff' } }}>
+                                Edit
+                              </Button>
+                            </Tooltip>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <Button size="small" startIcon={saving ? <CircularProgress size={11} sx={{ color: C.green }} /> : <IconDeviceFloppy size={13} />}
+                            onClick={handleSaveYaml} disabled={saving}
+                            sx={{ color: C.green, fontSize: 11, textTransform: 'none', minWidth: 0, p: '2px 8px', '&:hover': { color: '#4ade80' } }}>
+                            {saving ? 'Saving…' : 'Save'}
+                          </Button>
+                          <Button size="small" startIcon={<IconX size={13} />}
+                            onClick={() => setEditMode(false)}
+                            sx={{ color: '#f87171', fontSize: 11, textTransform: 'none', minWidth: 0, p: '2px 8px', '&:hover': { color: '#fca5a5' } }}>
+                            Cancel
+                          </Button>
+                        </>
+                      )}
+                    </Box>
                   </Box>
                   <Box sx={{ bgcolor: '#0f172a', maxHeight: 520, overflow: 'auto' }}>
-                    {fixedYaml ? diffLines(originalYaml, fixedYaml).map((line, i) => (
+                    {editMode ? (
+                      <textarea
+                        value={editedYaml}
+                        onChange={e => setEditedYaml(e.target.value)}
+                        spellCheck={false}
+                        style={{
+                          width: '100%', minHeight: 480, background: 'transparent', border: 'none',
+                          outline: 'none', color: '#94a3b8', fontSize: 12, fontFamily: '"Fira Code","Cascadia Code",monospace',
+                          lineHeight: 1.65, padding: '12px 16px', resize: 'vertical', boxSizing: 'border-box',
+                        }}
+                      />
+                    ) : fixedYaml ? diffLines(originalYaml, fixedYaml).map((line, i) => (
                       <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', bgcolor: line.isNew ? 'rgba(22,163,74,0.12)' : 'transparent', borderLeft: line.isNew ? `3px solid ${C.green}` : '3px solid transparent', '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' } }}>
                         <Typography sx={{ color: '#374151', fontSize: 11, fontFamily: 'monospace', width: 36, flexShrink: 0, textAlign: 'right', pr: 1.5, lineHeight: 1.65, userSelect: 'none' }}>{i + 1}</Typography>
                         <Typography component="pre" sx={{ color: line.isNew ? '#86efac' : '#94a3b8', fontSize: 12, fontFamily: '"Fira Code","Cascadia Code",monospace', m: 0, lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-all', flex: 1 }}>

@@ -27,3 +27,4 @@ class APISpecification(Base):
 
     suggestions_applied = Column(Boolean, default=False)
     user_justification = Column(String, nullable=True)
+    rejection_reason = Column(String, nullable=True)
