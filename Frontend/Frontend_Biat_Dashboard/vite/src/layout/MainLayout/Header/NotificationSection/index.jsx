@@ -21,7 +21,7 @@ import api from 'services/api';
 
 import { IconBell } from '@tabler/icons-react';
 
-const POLL_MS = 30_000;
+const POLL_MS = 8_000;
 
 export default function NotificationSection() {
   const theme = useTheme();

@@ -15,6 +15,7 @@ import Chip from '@mui/material/Chip';
 
 // project imports
 import LogoSection from '../LogoSection';
+import NotificationSection from './NotificationSection';
 import { handlerDrawerOpen, useGetMenuMaster } from 'api/menu';
 
 // assets
@@ -84,6 +85,7 @@ export default function Header() {
           size="small"
           sx={{ bgcolor: '#e8edf5', color: '#1e3a5f', fontWeight: 600, fontSize: 11, display: { xs: 'none', sm: 'flex' } }}
         />
+        <NotificationSection />
 
         <Box
           onClick={handleOpen}

@@ -222,6 +222,7 @@ export default function UploadPipeline() {
   const warnings = violations.filter(v => v.severity === 'WARNING');
   const score = structural?.score ?? 0;
   const passed = result?.final_status === 'PUBLISHED';
+  const isPending = result?.final_status === 'PENDING_APPROVAL';
   const fixedYaml = specData?.raw_content || '';
   const aiSuggested = specData?.semantic_analysis?.ai_suggested_fix || '';
   const isPipelineDone = !!result && step === 5;
@@ -554,12 +555,14 @@ ${result?.wso2_id ? `<div class="sec">WSO2 Deployment</div><div class="box">Depl
           {/* ── TAB 4: GATE ── */}
           {activeTab === 4 && (
             <Box>
-              <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, mb: 3, border: `1.5px solid ${passed ? C.green : C.red}`, bgcolor: passed ? C.greenLt : C.redLt }}>
+              <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, mb: 3, border: `1.5px solid ${passed ? C.green : isPending ? C.amber : C.red}`, bgcolor: passed ? C.greenLt : isPending ? C.amberLt : C.redLt }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  {passed ? <IconShieldCheck size={28} color={C.green} /> : <IconAlertCircle size={28} color={C.red} />}
+                  {passed ? <IconShieldCheck size={28} color={C.green} /> : <IconAlertCircle size={28} color={isPending ? C.amber : C.red} />}
                   <Box>
-                    <Typography sx={{ fontWeight: 700, fontSize: 16, color: passed ? C.green : C.red }}>Governance Gate — {passed ? 'APPROVED' : 'REJECTED'}</Typography>
-                    <Typography sx={{ fontSize: 13, color: C.slate }}>{governance?.reason || (passed ? 'All checks passed. API published to WSO2 Gateway.' : `Score ${score}% is below the 80% threshold.`)}</Typography>
+                    <Typography sx={{ fontWeight: 700, fontSize: 16, color: passed ? C.green : isPending ? C.amber : C.red }}>
+                      {passed ? 'Governance Gate — APPROVED' : isPending ? 'Governance Gate — PENDING APPROVAL' : 'Governance Gate — REJECTED'}
+                    </Typography>
+                    <Typography sx={{ fontSize: 13, color: C.slate }}>{governance?.reason || (passed ? 'All checks passed. API published to WSO2 Gateway.' : isPending ? 'Score meets 50% threshold. Awaiting admin review and approval.' : `Score ${score}% is below the 80% threshold.`)}</Typography>
                   </Box>
                 </Box>
               </Paper>
@@ -586,10 +589,10 @@ ${result?.wso2_id ? `<div class="sec">WSO2 Deployment</div><div class="box">Depl
             <Box>
               <Grid container spacing={2} sx={{ mb: 3 }}>
                 {[
-                  { label: 'Structural Score', value: `${score}%`, color: score >= 80 ? C.green : C.red, bg: score >= 80 ? C.greenLt : C.redLt },
+                  { label: 'Structural Score', value: `${score}%`, color: score >= 80 ? C.green : score >= 50 ? C.amber : C.red, bg: score >= 80 ? C.greenLt : score >= 50 ? C.amberLt : C.redLt },
                   { label: 'Errors Found', value: errors.length, color: errors.length === 0 ? C.green : C.red, bg: errors.length === 0 ? C.greenLt : C.redLt },
                   { label: 'Warnings', value: warnings.length, color: C.amber, bg: C.amberLt },
-                  { label: 'Gate Decision', value: passed ? 'PASS' : 'FAIL', color: passed ? C.green : C.red, bg: passed ? C.greenLt : C.redLt },
+                  { label: 'Gate Decision', value: passed ? 'PASS' : isPending ? 'PENDING' : 'FAIL', color: passed ? C.green : isPending ? C.amber : C.red, bg: passed ? C.greenLt : isPending ? C.amberLt : C.redLt },
                 ].map(s => (
                   <Grid item xs={6} md={3} key={s.label}>
                     <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, border: `1px solid ${C.border}`, textAlign: 'center' }}>
@@ -599,12 +602,16 @@ ${result?.wso2_id ? `<div class="sec">WSO2 Deployment</div><div class="box">Depl
                   </Grid>
                 ))}
               </Grid>
-              <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, mb: 3, border: `1.5px solid ${passed ? C.green : C.red}`, bgcolor: passed ? C.greenLt : C.redLt }}>
+              <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, mb: 3, border: `1.5px solid ${passed ? C.green : isPending ? C.amber : C.red}`, bgcolor: passed ? C.greenLt : isPending ? C.amberLt : C.redLt }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  {passed ? <IconShieldCheck size={24} color={C.green} /> : <IconAlertCircle size={24} color={C.red} />}
+                  {passed ? <IconShieldCheck size={24} color={C.green} /> : <IconAlertCircle size={24} color={isPending ? C.amber : C.red} />}
                   <Box>
-                    <Typography sx={{ fontWeight: 700, fontSize: 14, color: passed ? C.green : C.red }}>{passed ? 'Governance Gate — APPROVED' : 'Governance Gate — REJECTED'}</Typography>
-                    <Typography sx={{ fontSize: 12, color: C.slate }}>{passed ? 'All checks passed. API is being auto-published to WSO2 Gateway.' : `Score ${score}% is below the 80% minimum threshold required for publication.`}</Typography>
+                    <Typography sx={{ fontWeight: 700, fontSize: 14, color: passed ? C.green : isPending ? C.amber : C.red }}>
+                      {passed ? 'Governance Gate — APPROVED' : isPending ? 'Governance Gate — PENDING APPROVAL' : 'Governance Gate — REJECTED'}
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: C.slate }}>
+                      {passed ? 'All checks passed. API is being auto-published to WSO2 Gateway.' : isPending ? `Score ${score}% meets the 50% threshold. Specification is awaiting admin review and approval before WSO2 publication.` : `Score ${score}% is below the 50% minimum threshold required for publication.`}
+                    </Typography>
                   </Box>
                 </Box>
               </Paper>
