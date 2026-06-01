@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, TextField, Button, Paper, Alert, CircularProgress } from '@mui/material';
-import { IconShieldCheck } from '@tabler/icons-react';
+import logoImg from '../../../assets/Logo.jpg';
 import axios from 'axios';
 
 // ================================|| BIAT LOGIN ||================================ //
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 3;
 const LOCKOUT_MS = 60_000;
 
 export default function Login() {
@@ -75,11 +75,8 @@ export default function Login() {
         flexDirection: 'column', justifyContent: 'center', alignItems: 'center', p: 6
       }}>
         <Box sx={{ textAlign: 'center', color: '#fff' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 4 }}>
-            <Box sx={{ width: 44, height: 44, bgcolor: 'rgba(255,255,255,0.15)', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <IconShieldCheck size={26} color="#fff" />
-            </Box>
-            <Typography sx={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: 0.5 }}>BIAT Dev</Typography>
+          <Box sx={{ mb: 4 }}>
+            <img src={logoImg} alt="BIAT Logo" style={{ height: 44, width: 'auto' }} />
           </Box>
           <Typography variant="h3" sx={{ color: '#fff', fontWeight: 700, mb: 2, lineHeight: 1.3 }}>
             AI-Driven API Governance
@@ -101,11 +98,8 @@ export default function Login() {
       {/* Right panel */}
       <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
         <Paper sx={{ width: '100%', maxWidth: 420, p: 4, borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 4 }}>
-            <Box sx={{ width: 36, height: 36, bgcolor: '#1e3a5f', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <IconShieldCheck size={20} color="#fff" />
-            </Box>
-            <Typography sx={{ fontWeight: 800, fontSize: 18, color: '#1e3a5f' }}>BIAT Dev Portal</Typography>
+          <Box sx={{ mb: 4 }}>
+            <img src={logoImg} alt="BIAT Logo" style={{ height: 36, width: 'auto' }} />
           </Box>
 
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>Welcome back</Typography>

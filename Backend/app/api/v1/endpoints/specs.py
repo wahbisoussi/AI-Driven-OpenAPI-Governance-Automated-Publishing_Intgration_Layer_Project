@@ -4,7 +4,7 @@ import difflib
 from typing import List
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Body
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from fastapi.encoders import jsonable_encoder
 from datetime import datetime
 from app.db.session import get_db
@@ -68,23 +68,28 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
             version_diff = ''.join(diff_lines) if diff_lines else None
             previous_version_id = previous_spec.id
 
-        # 🪄 STEP 2: MANDATORY AI REFACTORING (only when structural violations exist)
+        # 🪄 STEP 2: MANDATORY AI REFACTORING (only when structural violations exist, not similarity rejections)
         ai_suggestions = pipeline_result.get("ai_analysis", {}).get("suggestions")
         violations = pipeline_result.get("violations", [])
+        similarity = pipeline_result.get("ai_analysis", {}).get("similarity", 0)
+        is_similarity_rejection = similarity >= 0.85
 
-        if violations and ai_suggestions and "Architecture is sound" not in ai_suggestions:
-            print(f"🪄 MANDATORY AUTO-FIX: Refactoring {file.filename}...")
-            fixed_yaml = llm_engine.apply_suggestion_to_yaml(spec.raw_content, ai_suggestions)
-            
-            if fixed_yaml and "openapi" in fixed_yaml.lower():
-                # Guard: reject AI fix if it creates duplicate operationIds (breaks WSO2)
-                op_ids = [l.split("operationId:")[-1].strip() for l in fixed_yaml.splitlines() if "operationId:" in l]
-                if len(op_ids) == len(set(op_ids)):
-                    spec.raw_content = fixed_yaml
-                    spec.suggestions_applied = True
-                    db.commit()
-                else:
-                    print(f"⚠️ AI fix produced duplicate operationIds — keeping original content")
+        if violations and ai_suggestions and "Architecture is sound" not in ai_suggestions and not is_similarity_rejection:
+            try:
+                print(f"🪄 MANDATORY AUTO-FIX: Refactoring {file.filename}...")
+                fixed_yaml = llm_engine.apply_suggestion_to_yaml(spec.raw_content, ai_suggestions)
+                
+                if fixed_yaml and "openapi" in fixed_yaml.lower():
+                    # Guard: reject AI fix if it creates duplicate operationIds (breaks WSO2)
+                    op_ids = [l.split("operationId:")[-1].strip() for l in fixed_yaml.splitlines() if "operationId:" in l]
+                    if len(op_ids) == len(set(op_ids)):
+                        spec.raw_content = fixed_yaml
+                        spec.suggestions_applied = True
+                        db.commit()
+                    else:
+                        print(f"⚠️ AI fix produced duplicate operationIds — keeping original content")
+            except Exception as fix_err:
+                print(f"⚠️ AI rewrite skipped (engine error): {fix_err}")
 
         # 🚀 STEP 3: WSO2 SYNC (admin path only — normal user ≥80% is handled in governance_service)
         allowed_statuses = ["PROTOTYPE_READY", "AWAITING_FIX_CONFIRMATION", "PUBLISHED"]
@@ -94,11 +99,10 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
             print(f"🚀 Gate Cleared! Pushing FIXED version to WSO2...")
             
             final_temp_path = f"final_fixed_{spec_id}.yaml"
-            with open(final_temp_path, "w") as f:
-                f.write(spec.raw_content)
-
             try:
-                # import_api_from_yaml already runs full lifecycle internally
+                with open(final_temp_path, "w") as f:
+                    f.write(spec.raw_content)
+
                 wso2_id = import_api_from_yaml(final_temp_path)
                 
                 if wso2_id:
@@ -109,6 +113,10 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
                     spec.workflow_status = WorkflowStatus.REJECTED
                     print(f"❌ WSO2 import failed")
                 
+                db.commit()
+            except Exception as wso2_err:
+                print(f"❌ WSO2 sync error in specs.py: {wso2_err}")
+                spec.workflow_status = WorkflowStatus.REJECTED
                 db.commit()
             finally:
                 if os.path.exists(final_temp_path):
@@ -135,9 +143,14 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
                         notification_type="AUTO_PUBLISHED"
                     ))
             elif spec.workflow_status == WorkflowStatus.REJECTED:
+                similarity = pipeline_result.get("ai_analysis", {}).get("similarity", 0)
+                if similarity >= 0.85:
+                    reject_msg = f"Your specification '{file.filename}' was rejected — similarity score {round(similarity * 100, 1)}% exceeds the 85% threshold. A functionally identical API already exists in the catalog."
+                else:
+                    reject_msg = f"Your specification '{file.filename}' was automatically rejected. Structural score {round(structural_score, 1)}% did not meet the 50% minimum threshold."
                 db.add(Notification(
                     user_id=current_user.id,
-                    message=f"Your specification '{file.filename}' was automatically rejected. Structural score {round(structural_score, 1)}% did not meet the 50% minimum threshold.",
+                    message=reject_msg,
                     spec_id=spec.id,
                     notification_type="REJECTION"
                 ))
@@ -165,7 +178,12 @@ async def upload_spec(file: UploadFile = File(...), db: Session = Depends(get_db
 def get_all_specs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = db.query(APISpecification).options(joinedload(APISpecification.semantic_analysis))
     if current_user.role != "ADMIN":
-        query = query.filter(APISpecification.user_id == current_user.id)
+        query = query.filter(
+            or_(
+                APISpecification.user_id == current_user.id,
+                APISpecification.workflow_status == WorkflowStatus.PUBLISHED
+            )
+        )
     return query.all() or []
 
 @router.get("/{spec_id}/report")
@@ -363,6 +381,8 @@ def mark_notification_read(notif_id: int, db: Session = Depends(get_db), current
 # --- 5. DELETE BY ID ---
 @router.delete("/{spec_id}")
 def delete_spec_by_id(spec_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Only admins can delete specifications.")
     spec = db.query(APISpecification).filter(APISpecification.id == spec_id).first()
     if not spec:
         raise HTTPException(status_code=404, detail="API Specification not found.")

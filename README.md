@@ -62,6 +62,17 @@ Developer submits spec
 
 An API only reaches production if it passes **all four gates**.
 
+### Score-Based Routing
+
+| Structural Score | Similarity | Role | Result |
+|---|---|---|---|
+| Any | ≥ 85% | Any | **Auto-Rejected** (redundant API) |
+| Any | > 98% | Any | **Auto-Rejected** (exact duplicate) |
+| < 50% | — | Any | **Auto-Rejected** (too many structural errors) |
+| 50–79% | < 85% | Developer | **Pending Admin Approval** |
+| ≥ 80% | < 85% | Developer | **Auto-Published** to WSO2 |
+| ≥ 40% | — | Admin | **Published** to WSO2 (admin path, no approval needed) |
+
 ---
 
 ## Key Results
@@ -85,8 +96,9 @@ The system is divided into four zones:
 
 - **Structural Validation** — Spectral catches naming errors, missing fields, and format violations
 - **Semantic Matching** — PGVector embeddings detect duplicate API intent (similarity threshold < 85%)
-- **Governance Gate** — Authorization or rejection based on combined structural + semantic scores
+- **Governance Gate** — Score-based routing: auto-reject, pending approval, or auto-publish depending on role and thresholds
 - **WSO2 Lifecycle** — Automates the Prototype → Published transition upon successful validation
+- **Role-Based Governance** — Separate upload paths for Admin (no approval gate) and Developer (score-gated approval workflow)
 
 ### Request Lifecycle
 
@@ -123,6 +135,31 @@ Each specification moves through tracked states. **PUBLISHED** status is only re
 
 ---
 
+## Role-Based Access Control
+
+Two distinct roles govern the platform:
+
+| Capability | Developer | Admin |
+|---|---|---|
+| Upload YAML | ✅ | ✅ |
+| See own specs | ✅ | ✅ |
+| See all published specs | ✅ | ✅ |
+| See all specs (any status) | ❌ | ✅ |
+| Delete specs | ❌ | ✅ |
+| Approve / Reject pending specs | ❌ | ✅ |
+| Skip approval gate | ❌ | ✅ |
+| Receive approval/rejection notifications | ✅ | ❌ |
+| Receive pending-review notifications | ❌ | ✅ |
+
+**Default credentials:**
+
+| Role | Username | Password |
+|---|---|---|
+| Admin | `biat_admin` | `biat6767` |
+| Developer | `biat_dev` | `dev1234` |
+
+---
+
 ## Frontend Dashboard
 
 > ✅ **Completed** — React dashboard fully integrated with the backend via OAuth2 + JWT authentication.
@@ -133,9 +170,12 @@ Delivered features:
 - **AI Fix Panel** — Qwen 2.5 semantic analysis results with before/after score comparison and AI-suggested fixes per specification
 - **AI Diff View** — Code viewer showing original vs AI-optimized YAML with line-level green highlighting of applied changes
 - **Version Diff** — When uploading a new version of an existing spec (same filename), a unified diff panel highlights exactly what changed vs the previous submission (green = added, red = removed)
+- **Raw YAML Editor** — View, edit, and save raw YAML content directly from the spec detail view; includes a one-click download button
 - **PDF Export** — One-click export of the full governance report (scores, violations, gate decision, WSO2 status) as a browser print-ready PDF
 - **CSV Export** — Download the full governance report as a structured CSV file for compliance records and audit trails
-- **Spec Management** — Browse, search, filter, and delete all specifications with status badges
+- **All APIs View** — Developers see their own specs plus all published specs; Admins see every spec regardless of status
+- **Admin Approval Workflow** — Admins can approve or reject `PENDING_APPROVAL` specs with an optional reason/note that is stored and displayed in the spec detail view
+- **Notification Bell** — Real-time notification system polling every 8 seconds: admins notified on new dev submissions; developers notified on approval or rejection (with reason)
 - **WSO2 Sync Status** — Real-time publication status (WSO2 external ID) per spec
 - **Analytics Dashboard** — Platform-wide KPIs: total APIs, published/rejected counts, average health score
 - **Authentication** — OAuth2 Password Flow + JWT (8h expiry), bcrypt-hashed passwords, brute-force lockout, JWT expiry guard on protected routes
@@ -243,7 +283,7 @@ docker exec -it api_governance_ollama ollama pull qwen2.5:1.5b
 | Prometheus | `http://localhost:9090` |
 | Grafana | `http://localhost:3001` |
 
-Default credentials: `biat_admin` / `biat6767`
+Default credentials: `biat_admin` / `biat6767` (admin), `biat_dev` / `dev1234` (developer)
 
 ---
 
@@ -297,7 +337,12 @@ review processes were creating bottlenecks and inconsistency across teams.
 **Deliverables:**
 - Comprehensive API Style Guide aligned with Microsoft REST Guidelines
 - AI-Powered OpenAPI Analysis Tool (this repository)
-- Governance Validation Pipeline
+- Governance Validation Pipeline with score-based routing (auto-reject / pending-approval / auto-publish)
+- Role-based access control: separate admin and developer governance flows
+- Admin approval workflow with notes — admins review, approve, or reject pending submissions with an optional reason displayed to the developer
+- Real-time notification system — bell alerts for both roles on spec lifecycle events
+- Exact-duplicate and near-duplicate detection via PGVector (>98% = exact duplicate; ≥85% = redundant)
+- Raw YAML editor with save and download from the spec detail view
 - PDF/CSV compliance report generation for audit trails
 - API version diff tracking between specification submissions
 - Real-time operational monitoring via Prometheus + Grafana

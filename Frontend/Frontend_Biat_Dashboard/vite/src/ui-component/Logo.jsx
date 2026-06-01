@@ -1,17 +1,10 @@
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import { IconShieldCheck } from '@tabler/icons-react';
+import logoImg from '../assets/Logo.jpg';
 
 // ==============================|| BIAT LOGO ||============================== //
 
 export default function Logo() {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <Box sx={{ width: 30, height: 30, bgcolor: '#1e3a5f', borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <IconShieldCheck size={18} color="#fff" />
-      </Box>
-      <Typography sx={{ fontWeight: 800, fontSize: 16, color: '#1e3a5f', letterSpacing: 0.3 }}>BIATDev</Typography>
-    </Box>
+    <img src={logoImg} alt="BIAT Logo" style={{ height: 32, width: 'auto', display: 'block' }} />
   );
 }
 

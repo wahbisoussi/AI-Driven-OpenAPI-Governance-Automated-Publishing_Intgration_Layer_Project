@@ -263,12 +263,14 @@ export default function MyAPIs() {
                               </Tooltip>
                             </>
                           )}
-                          <IconButton size="small"
-                            onClick={e => { e.stopPropagation(); setConfirmId(spec.id); }}
-                            disabled={deleting === spec.id}
-                            sx={{ color: C.slate, '&:hover': { color: C.red, bgcolor: C.redLt }, borderRadius: 1 }}>
-                            {deleting === spec.id ? <CircularProgress size={14} /> : <IconTrash size={15} />}
-                          </IconButton>
+                          {isAdmin && (
+                            <IconButton size="small"
+                              onClick={e => { e.stopPropagation(); setConfirmId(spec.id); }}
+                              disabled={deleting === spec.id}
+                              sx={{ color: C.slate, '&:hover': { color: C.red, bgcolor: C.redLt }, borderRadius: 1 }}>
+                              {deleting === spec.id ? <CircularProgress size={14} /> : <IconTrash size={15} />}
+                            </IconButton>
+                          )}
                           <IconChevronRight size={14} color={C.slate} />
                         </Box>
                       </TableCell>

@@ -1,0 +1,149 @@
+openapi: 3.0.1
+info:
+  title: BIAT Account Management API
+  description: Enterprise API for managing and retrieving banking account resources for retail clients.
+  version: 2026-05-01
+  contact:
+    name: BIAT Integration Team
+    email: integration-support@biat.com.tn
+servers:
+  - url: https://api.biat.com.tn/v2
+    description: Production Environment
+paths:
+  /accounts/{accountId}:
+    get:
+      summary: Get account details
+      operationId: Accounts_Get
+      security:
+        - OAuth2: [read:accounts]
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Unique identifier of the bank account
+      responses:
+        '200':
+          description: Account details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDetail'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '404':
+          description: Account not found
+        default:
+          description: Unexpected error
+
+  /accounts:
+    get:
+      summary: List all accounts
+      operationId: Accounts_List
+      security:
+        - OAuth2: [read:accounts]
+      responses:
+        '200':
+          description: List of accounts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountDetail'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        default:
+          description: Unexpected error
+
+  /accounts/{accountId}/balance:
+    get:
+      summary: Retrieve account balance
+      operationId: Accounts_GetBalance
+      security:
+        - OAuth2: [read:accounts]
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Unique identifier of the bank account
+      responses:
+        '200':
+          description: Account balance retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountBalance'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '404':
+          description: Account not found
+        default:
+          description: Unexpected error
+
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://api.biat.com.tn/oauth/token
+          scopes:
+            read:accounts: Read account data
+
+  schemas:
+    AccountDetail:
+      description: Represents a retail banking account
+      type: object
+      required:
+        - accountId
+        - balance
+        - currencyCode
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Unique account identifier
+        balance:
+          type: number
+          format: double
+          description: Current account balance
+        currencyCode:
+          type: string
+          description: ISO 4217 currency code
+          minLength: 3
+          maxLength: 3
+        status:
+          type: string
+          description: Current account status
+          enum: [ACTIVE, SUSPENDED, CLOSED]
+
+    AccountBalance:
+      description: Represents the balance of a banking account
+      type: object
+      required:
+        - accountId
+        - balance
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Unique account identifier
+        balance:
+          type: number
+          format: double
+          description: Current account balance
+        currencyCode:
+          type: string
+          description: ISO 4217 currency code

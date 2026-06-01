@@ -15,14 +15,7 @@ MIN_SCORE_FOR_AI = 10
 def run_governance_pipeline(db: Session, title: str, version: str, content: str, user_id: int, is_admin: bool = True):
     ai_service = AIService()
 
-    # --- 1. DUPLICATE DETECTION ---
-    text_to_embed = ai_service.vector_store._extract_searchable_text(content)
-    current_embedding = ai_service.vector_store.get_embedding(text_to_embed)
-    match_data = ai_service.vector_store.find_most_similar(db, -1, current_embedding)
-    if match_data and match_data[1] > 0.98:
-        return {"status": "REJECTED", "reason": "Duplicate API detected."}
-
-    # --- 2. INITIAL RECORD ---
+    # --- 1. INITIAL RECORD (always first — every return path needs a spec_id) ---
     new_spec = APISpecification(title=title, version=version, raw_content=content, user_id=user_id, workflow_status=WorkflowStatus.IMPORTED)
     db.add(new_spec)
     db.commit()
@@ -32,6 +25,24 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
     with open(temp_file_path, "w") as f: f.write(content)
 
     try:
+        # --- 2. DUPLICATE DETECTION ---
+        text_to_embed = ai_service.vector_store._extract_searchable_text(content)
+        current_embedding = ai_service.vector_store.get_embedding(text_to_embed)
+        match_data = ai_service.vector_store.find_most_similar(db, new_spec.id, current_embedding)
+        if match_data and match_data[1] > 0.98:
+            new_spec.workflow_status = WorkflowStatus.REJECTED
+            new_spec.rejection_reason = "Exact duplicate detected. This API already exists in the enterprise catalog."
+            db.commit()
+            return {
+                "spec_id": new_spec.id,
+                "status": WorkflowStatus.REJECTED.value,
+                "governance_decision": "REJECTED",
+                "structural_score": 0,
+                "violations": [],
+                "refactored_yaml": content,
+                "ai_analysis": {"similarity": float(match_data[1]), "suggestions": "Exact duplicate API detected. This specification is identical to an existing catalog entry."},
+                "deployment_status": "FAILED"
+            }
         # --- 3. STRUCTURAL AUDIT (Spectral) ---
         raw_violations = run_spectral_audit(temp_file_path)
         audit_results = calculate_structural_score(raw_violations)
@@ -166,7 +177,7 @@ def run_governance_pipeline(db: Session, title: str, version: str, content: str,
     except Exception as e:
         db.rollback()
         print(f"❌ PIPELINE CRASH: {e}")
-        return {"status": "ERROR", "reason": str(e)}
+        return {"status": "ERROR", "reason": str(e), "spec_id": new_spec.id}
     finally:
         if os.path.exists(temp_file_path): 
             os.remove(temp_file_path)
