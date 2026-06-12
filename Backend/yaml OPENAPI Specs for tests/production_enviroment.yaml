@@ -1,0 +1,179 @@
+openapi: "3.0.3"
+info:
+  title: BIAT Corporate Accounts API
+  description: "Handles corporate account management for BIAT business clients."
+  version: "2026-05-24"
+  contact:
+    name: BIAT API Governance
+    url: https://api.biat.com.tn/support
+    email: api.governance@biat.com.tn
+
+servers:
+  - url: https://api.biat.com.tn/v2
+    description: Production Environment
+
+tags:
+  - name: Accounts
+    description: Corporate account operations
+
+paths:
+  /accounts:
+    get:
+      summary: List all corporate accounts
+      operationId: getAccounts
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+        "400":
+          description: Bad request
+
+    post:
+      summary: Create a new corporate account
+      operationId: createAccount
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountRequest"
+      responses:
+        "201":
+          description: Account created successfully
+        "400":
+          description: Bad request
+
+  /accounts/{accountId}:
+    get:
+      summary: Get account by ID
+      operationId: getAccountById
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the account
+      responses:
+        "200":
+          description: Account details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          description: Bad request
+
+    patch:
+      summary: Update account details
+      operationId: updateAccount
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountUpdate"
+      responses:
+        "200":
+          description: Account updated
+        "400":
+          description: Bad request
+
+  /accounts/{accountId}/transactions:
+    get:
+      summary: List account transactions
+      operationId: listTransactions
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier of the account
+      responses:
+        "200":
+          description: Transaction list
+        "400":
+          description: Bad request
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token authentication
+
+  schemas:
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique account identifier
+        name:
+          type: string
+          description: Account holder name
+        balance:
+          type: number
+          description: Current account balance
+        currency:
+          type: string
+          description: ISO 4217 currency code
+        isActive:
+          type: boolean
+          description: Whether the account is active
+        isVerified:
+          type: boolean
+          description: Whether the account is verified
+
+    AccountRequest:
+      type: object
+      required: [name, currency]
+      properties:
+        name:
+          type: string
+          description: Account holder name
+        currency:
+          type: string
+          description: ISO 4217 currency code
+        isActive:
+          type: boolean
+          description: Initial active state of the account
+
+    AccountUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Updated account holder name
+        isActive:
+          type: boolean
+          description: Updated active state of the account
